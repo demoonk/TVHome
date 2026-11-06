@@ -46,10 +46,29 @@ if (Test-Path -LiteralPath $guard -PathType Leaf) {
     $guardPid = (& $adbPath -s $Device shell cat /data/local/tmp/assistant-package-guard.pid 2>$null | Out-String).Trim()
     if ($guardPid -match '^\d+$') {
         $guardCommand = (& $adbPath -s $Device shell cat "/proc/$guardPid/cmdline" 2>$null | Out-String)
-        if ($guardCommand.Replace([char]0, [char]32) -match 'sh /data/local/tmp/assistant-package-guard.sh') { Invoke-Target "kill $guardPid" | Out-Null }
+        if ($guardCommand.Replace([char]0, [char]32) -match 'sh /data/local/tmp/assistant-package-guard.sh') {
+            Invoke-Target "kill $guardPid" | Out-Null
+            # The old trap removes its PID file; wait before a new process writes that same file.
+            for ($wait = 0; $wait -lt 20; $wait++) {
+                $stillRunning = (& $adbPath -s $Device shell cat "/proc/$guardPid/cmdline" 2>$null | Out-String)
+                if ($stillRunning.Replace([char]0, [char]32) -notmatch 'sh /data/local/tmp/assistant-package-guard.sh') { break }
+                Start-Sleep -Milliseconds 200
+            }
+            if ($stillRunning.Replace([char]0, [char]32) -match 'sh /data/local/tmp/assistant-package-guard.sh') { throw 'Previous assistant guard has not exited' }
+        }
     }
     & $adbPath -s $Device push $guard /data/local/tmp/assistant-package-guard.sh
     if ($LASTEXITCODE -ne 0) { throw 'Assistant guard upload failed' }
     Invoke-Target 'nohup sh /data/local/tmp/assistant-package-guard.sh >/data/local/tmp/assistant-package-guard.log 2>&1 </dev/null &' | Out-Null
+    $guardReady = $false
+    for ($attempt = 0; $attempt -lt 15; $attempt++) {
+        $startedPid = (& $adbPath -s $Device shell cat /data/local/tmp/assistant-package-guard.pid 2>$null | Out-String).Trim()
+        if ($startedPid -match '^\d+$') {
+            $startedCommand = (& $adbPath -s $Device shell cat "/proc/$startedPid/cmdline" 2>$null | Out-String)
+            if ($startedCommand.Replace([char]0, [char]32) -match 'sh /data/local/tmp/assistant-package-guard.sh') { $guardReady = $true; break }
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    if (-not $guardReady) { throw 'Assistant guard did not report readiness' }
 }
 Write-Output 'Remote bridge started for this boot. Test the physical gear, Back from search, and held volume keys.'
