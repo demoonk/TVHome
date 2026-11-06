@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- Needed since Android 10 to read the Wi-Fi network name for the network pill. Never requested at
+         runtime: build-and-install grants it with pm grant, so lint's Android 12 "ask for COARSE with
+         FINE" rule does not apply here. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        tools:ignore="CoarseFineLocation" />
+    <!-- Puts the remote's accessibility helpers back after a force stop of this app took them off the enabled
+         list (ServiceRepair). Granted with pm grant by build-and-install when a helper is enabled. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- Sleep timer alarm (SleepTimer). Normal permission; the code still falls back to an inexact
+         alarm when Android refuses the exact one. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- The floating clock and the sleep scrim: an ordinary app overlay instead of an accessibility one, because
+         any accessibility service costs this firmware its remote volume auto-repeat. Granted with appops over adb. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Start Home right after boot (BootReceiver): some firmware ignores the saved preferred home. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Which VPN app owns the running tunnel (MainActivity.tunnelOwnerFromUsage), because Android 14
+         redacts the tunnel's session name from normal apps. An app-op permission: granted with appops
+         set by build-and-install, never requested at runtime. -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- YaOS (Yandex TV OS): HDMI, AV and the tuner all play in com.yandex.tv.live, whose activities require
+         this permission (protection level normal, so it is granted at install). Ignored on other TVs. -->
+    <uses-permission android:name="yandex.tv.permission.ACCESS_TV_SOURCE" />
+
+    <!-- Android 11+ package visibility: lets the launcher list the TV apps it shows as tiles, and the
+         apps that declare a module card (docs/specs/card.md). -->
+    <!-- Fork-only, upstream rule broken by design: the Projectivy wallpaper source plays the videos a
+       provider plugin hands over, and those are remote https URLs, so MediaPlayer needs network access.
+       This is why this fork cannot ever be an upstream PR. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <queries>
+        <intent><action android:name="android.intent.action.OPEN_DOCUMENT" /><category android:name="android.intent.category.OPENABLE" /><data android:mimeType="*/*" /></intent>
+        <intent><action android:name="android.intent.action.OPEN_DOCUMENT_TREE" /></intent>
+        <intent><action android:name="android.service.wallpaper.WallpaperService" /></intent>
+        <intent><action android:name="android.service.wallpaper.CHANGE_LIVE_WALLPAPER" /></intent>
+        <!-- Projectivy wallpaper-provider plugins (Aerial Views): package visibility for the "Aerial Views" wallpaper source. -->
+        <intent><action android:name="tv.projectivy.plugin.WALLPAPER_PROVIDER" /></intent>
+        <intent><action android:name="android.net.VpnService" /></intent>
+        <package android:name="com.google.android.katniss" />
+        <package android:name="com.google.android.tts" />
+        <intent><action android:name="android.intent.action.SEARCH" /></intent>
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <provider android:authorities="ru.yourok.num.atvsearch" />
+        <intent><action android:name="android.speech.action.RECOGNIZE_SPEECH" /></intent>
+        <!-- The standard settings handlers, so package visibility doesn't hide them and send the pills to a vendor fallback by mistake. -->
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.WIFI_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.DISPLAY_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.MANAGE_APPLICATIONS_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="ru.pda.tvhome.category.DOCK_CARD" />
+        </intent>
+        <!-- stock_home_redirect: HomeKeyService looks up the stock launcher's HOME activity. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+        <!-- China-market MIUI TV firmware: the Settings and Wi-Fi pills fall back to Xiaomi's settings app.
+             Fire TV: the real settings menu lives in the stock launcher (see settings_fallback_components). -->
+        <package android:name="com.xiaomi.mitv.settings" />
+        <package android:name="com.tcl.settings" />
+        <package android:name="com.amazon.tv.launcher" />
+        <!-- vpn_buttons: the top bar VPN buttons need these visible to find the app and read its icon. -->
+        <package android:name="io.github.romanvht.byedpi" />
+        <package android:name="com.zaneschepke.wireguardautotunnel" />
+        <!-- Coocaa OS sources for the Inputs menu (coocaa_sources); see CoocaaSources. -->
+        <provider android:authorities="com.skyworth.tv.provider" />
+        <provider android:authorities="com.skyworth.tv.sdk.provider" />
+        <!-- The Weather module card: the header's two lines read its snapshot and ask it to fetch. -->
+        <package android:name="io.github.sumyabazar1.weather" />
+        <provider android:authorities="io.github.sumyabazar1.weather.snapshot" />
+    </queries>
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <application
+        android:label="@string/app_name"
+        android:icon="@drawable/ic_launcher_home"
+        android:banner="@drawable/banner"
+        android:theme="@style/Theme.TvHome"
+        android:allowBackup="false"
+        android:localeConfig="@xml/locales_config">
+
+        <service android:name=".UpdateCheckJob" android:exported="true"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates" android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
+        </provider>
+
+        <activity android:name=".SiteSearchActivity" android:exported="false" />
+        <activity android:name="com.gathin.tvhome.WallpaperBrowserActivity" android:exported="false" />
+        <activity android:name="com.gathin.tvhome.VoiceLaunchActivity" android:exported="true"
+            android:launchMode="singleTask" android:excludeFromRecents="true" android:taskAffinity="${applicationId}.voice">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <service android:name="com.gathin.tvhome.LauncherAssistantService"
+            android:label="@string/app_name" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/launcher_assistant" />
+        </service>
+        <service android:name="com.gathin.tvhome.LauncherAssistantSessionService"
+            android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION" />
+        <service android:name="com.gathin.tvhome.AssistantRecognitionService"
+            android:exported="true" android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
+            <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
+        </service>
+        <receiver android:name="com.gathin.tvhome.TimerStatusReceiver" android:exported="true" />
+        <activity
+            android:name="com.gathin.tvhome.MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:stateNotNeeded="true"
+            android:excludeFromRecents="true"
+            android:clearTaskOnLaunch="true"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|uiMode"
+            android:screenOrientation="landscape">
+            <!-- priority 3 beats both the firmware's recovery stub (1) and the stock Google TV launcher (2),
+                 so the system resolves HOME here even when it forgets the saved preference. -->
+            <intent-filter android:priority="3">
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Listed in the TV's own app list, so it can be opened from the stock home screen too. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <receiver
+            android:name="com.gathin.tvhome.BootReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="ru.pda.tvhome.action.PICTURE_KEY_OFF" />
+            </intent-filter>
+        </receiver>
+
+        <activity
+            android:name="com.gathin.tvhome.LauncherSettingsActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape" />
+        <!-- The system input switcher (com.android.tv.action.VIEW_INPUTS), which is what the remote's Input
+             button becomes through the TV's Live TV app or InputKeyService. Disabled here and switched on by
+             MainActivity only while handle_view_inputs is true (config.xml or a theme), for sets whose stock
+             launcher was the only handler of the action (Hisense huangshan, Android TV 10): kept off, a TV with
+             its own input picker never sees a second candidate and a chooser. -->
+        <activity
+            android:name="com.gathin.tvhome.InputsRequestActivity"
+            android:exported="true"
+            android:enabled="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="com.android.tv.action.VIEW_INPUTS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <!-- Remote Settings button panel (settings_key_panel); own task so the app behind stays put.
+             No screenOrientation: a translucent activity may not request one on Android 8.0 (API 26),
+             which throws IllegalStateException in onCreate (#1122); a TV is landscape anyway. -->
+        <activity
+            android:name="com.gathin.tvhome.QuickSettingsActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen" />
+        <activity
+            android:name="com.gathin.tvhome.HomeSettingsActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.NoDisplay" />
+        <!-- Home button for remotes that send KEYCODE_ALL_APPS (Xiaomi). Opt-in: HOME_KEY_SERVICE=1
+             build-and-install.sh; see HomeKeyService. -->
+        <service
+            android:name="com.gathin.tvhome.HomeKeyService"
+            android:label="@string/home_key_name"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/home_key_service" />
+        </service>
+
+        <!-- stock_home_redirect without key filtering: same redirect, no keys at all, so firmware that stops
+             repeating the volume keys while a service filters them keeps its repeat. Enable this one instead of
+             HomeKeyService when no remote buttons are remapped (see HomeRedirectService). -->
+        <service
+            android:name="com.gathin.tvhome.HomeRedirectService"
+            android:label="@string/home_key_name"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/home_redirect_service" />
+        </service>
+
+        <!-- The same clock, started by Home itself after home_idle_clock_minutes without input. -->
+        <activity
+            android:name="com.gathin.tvhome.ClockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
+        <!-- stock_home_redirect at boot: HomeKeyService opens this invisible activity once, so the screen behind
+             it sends a window event when it closes (HomeKeyService.probeAtBoot). -->
+        <activity
+            android:name="com.gathin.tvhome.ProbeActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Screensaver: pick it in Settings, or `settings put secure screensaver_components
+             ru.pda.tvhome/.ClockDream` over adb. -->
+        <service
+            android:name="com.gathin.tvhome.ClockDream"
+            android:label="@string/dream_name"
+            android:exported="true"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+
+
+        <!-- The remote's Input button (KEYCODE_TV or KEYCODE_TV_INPUT) opens the input switcher, and input_key_keycodes and
+         app_keys (config.xml or a theme) bring back other remote buttons; see InputKeyService. -->
+        <service
+            android:name="com.gathin.tvhome.InputKeyService"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/input_key_service" />
+        </service>
+
+        <service android:name="com.gathin.tvhome.OverlayService" android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-enabled floating clock and sleep timer" />
+        </service>
+
+        <!-- Wakes at the sleep timer's deadline and dims the screen (SleepTimer / SleepReceiver). -->
+        <receiver
+            android:name="com.gathin.tvhome.SleepReceiver"
+            android:exported="false" />
+    </application>
+</manifest>

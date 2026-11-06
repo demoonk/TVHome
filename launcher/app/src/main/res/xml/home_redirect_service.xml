@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- stock_home_redirect without key filtering: no flagRequestFilterKeyEvents and no canRequestFilterKeyEvents,
+     so the firmware keeps the remote's key auto-repeat (some sets stop repeating the volume keys as soon as an
+     enabled accessibility service filters keys). Events are window changes only, added at runtime. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:description="@string/home_key_description" />
