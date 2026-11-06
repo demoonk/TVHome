@@ -1,5 +1,7 @@
 # Скриншоты и настройки / Screenshots and settings
 
+Главный экран размещён отдельно в основном README; название города скрыто для публикации. / The main screen appears separately in the project README; the city name is hidden for publication.
+
 9 настоящих снимков TVHome 1.4.23 с Android TV (AI PONT MAX FF, Android 14), 6 ноября 2026. Изображения интерфейса не перерисовывались. / Nine real captures from an Android TV running TVHome 1.4.23, November 6, 2026.
 
 | | | |

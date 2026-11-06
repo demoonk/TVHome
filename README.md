@@ -2,6 +2,12 @@
 
 Лаунчер для Android TV (Chiq-based TV, Dexp, Tuvio). Личный форк [CleanYourTV](https://github.com/Gathin23/cleanyourtv), MIT.
 
+![Главный экран TVHome / Main screen](docs/screenshots/00-home.png)
+
+## Бонус: обои / Bonus wallpapers
+
+[Скачать ZIP с 67 обоями и посмотреть превью каждой папки / Download 67 wallpapers and browse folder previews](docs/wallpapers/README.md). Обои с дизерингом: плавные градиенты без заметных ступенек бандинга на ТВ. / Dithered wallpapers for smoother TV gradients with less visible banding.
+
 ## Скриншоты / Screenshots
 
 [Галерея: 9 снимков с настоящего ТВ и настройки кратко / Nine real TV screenshots and a brief settings guide](docs/screenshots/README.md)
@@ -13,6 +19,8 @@
 ## Установка и обновления — русский
 
 Требуется Android TV / Google TV **Android 8.0 и новее (API 26)**. Идентификатор приложения: **`ru.pda.tvhome`**. Совместимость выбора Home и кнопок пульта зависит от прошивки. Штатный лаунчер должен оставаться включённым: это позволяет безопасно вернуться к нему.
+
+Для базовой установки достаточно APK; все файлы лаунчера включены. Дополнительные приложения (браузер Яндекса, NUM и другие источники) устанавливаются отдельно. Плавающие часы требуют разрешения поверх других приложений, микрофон — доступа к записи звука. Установочные скрипты не выдают эти разрешения и не настраивают системного голосового помощника; полный голосовой сценарий на чистом ТВ пока не является автоматической установкой.
 
 ### Скачать и установить APK
 
@@ -76,6 +84,8 @@ sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-1.4.23.apk" "./platform-tools/adb"
 ## Installation, updates and rollback — English
 
 TVHome requires **Android TV / Google TV running Android 8.0 or newer (API 26)**. Its application ID is **`ru.pda.tvhome`**. Home selection and remote-button support depend on the TV firmware. **Keep the stock launcher enabled** so you can switch back safely.
+
+The APK contains everything needed for the basic launcher installation. External apps (Yandex Browser, NUM and other providers) must be installed separately. Floating clocks require permission to display over other apps; microphone input requires audio recording permission. The installers do not grant these permissions or configure the system voice assistant; the complete voice setup on a fresh TV is not automated.
 
 ### Download and install
 
