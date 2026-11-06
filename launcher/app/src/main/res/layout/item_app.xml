@@ -16,7 +16,7 @@
         android:focusable="true"
         android:clickable="true">
 
-        <com.gathin.tvhome.TileBannerView
+        <ru.pda.tvhome.TileBannerView
             android:id="@+id/banner"
             android:layout_width="match_parent"
             android:layout_height="match_parent"

@@ -43,7 +43,7 @@ if ($paths.Count -gt 0) {
 $installed = Invoke-Adb -Arguments @('-s', $Device, 'install', '-r', $apkPath)
 Write-Output $installed
 if ($installed -notmatch '(?m)^Success\s*$') { throw 'Installation did not report Success; launch aborted' }
-$started = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'am', 'start', '-W', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME', '-n', 'ru.pda.tvhome/com.gathin.tvhome.MainActivity')
+$started = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'am', 'start', '-W', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME', '-n', 'ru.pda.tvhome/ru.pda.tvhome.MainActivity')
 Write-Output $started
 if ($started -match '(?im)^Error:|Exception') { throw 'APK installed but TVHome could not start' }
 Write-Output 'TVHome installed. Select the default Home in system Settings if needed. App data was preserved by install -r.'

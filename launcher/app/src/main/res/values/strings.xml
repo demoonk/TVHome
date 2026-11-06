@@ -5,14 +5,12 @@
     <string name="voice_assistant">Голосовой помощник</string>
     <string name="assistant_system">Системный</string>
     <string name="assistant_launcher">Google от лаунчера</string>
-    <string name="assistant_choose_system">Выберите голосового помощника в настройках системы</string>
     <string name="app_name">Home</string>
     <string name="inputs">Inputs</string>
     <string name="wifi">Wi-Fi</string>
     <string name="settings">Settings</string>
     <string name="choose_input">Inputs</string>
     <string name="connected">Connected</string>
-    <string name="standby">Standby</string>
     <string name="not_connected">No device</string>
     <string name="live_tv">Live TV</string>
     <string name="no_inputs">No inputs found</string>
@@ -56,17 +54,7 @@
     <string name="launcher_settings">Launcher settings</string>
     <string name="columns_label">Apps per row</string>
     <string name="rows_below_dock_label">Rows below dock</string>
-    <string name="dock_opacity_label">Dock band opacity</string>
-    <string name="wallpaper_label">Wallpaper</string>
-    <string name="wallpaper_state">Wallpaper: %1$s</string>
-    <string name="wallpaper_none">None</string>
-    <string name="wallpaper_applied">Wallpaper changed</string>
-    <string name="wallpaper_theme_default">Theme default</string>
     <string name="animations_state">Animations: %1$s</string>
-    <string name="advanced_effects">Advanced effects</string>
-    <string name="advanced_effects_state">Advanced effects: %1$s</string>
-    <string name="advanced_effects_warning">Adds a lifted tile, icon zoom and smooth colour transitions. May increase memory use; the actual difference depends on your TV.</string>
-    <string name="follow_theme">Follow theme (reset on-TV choices)</string>
     <string name="follow_theme_hint">Uses the current theme or built-in layout and motion settings. Pushing or resetting a theme also clears your on-TV choices.</string>
     <string name="tv_settings">TV system settings</string>
     <string name="quick_picture">Display</string>
@@ -75,7 +63,6 @@
     <string name="quick_apps_hint">Re-enable</string>
     <string name="on">On</string>
     <string name="off">Off</string>
-    <string name="enable">Enable</string>
     <string name="input_key_service_description">Opens the input switcher when the remote\'s Input button is pressed.</string>
     <string name="home_key_name">Home button</string>
     <string name="home_key_description">Makes the remote\'s Home button open this launcher.</string>
@@ -98,38 +85,21 @@
     <string name="card_state_new">New</string>
     <string name="card_state_new_key">New key</string>
     <string name="card_state_new_label">New name</string>
-    <string name="dock_edit">Edit dock</string>
     <string name="dock_edit_hint">Choose the dock place to change and press OK. Back to finish.</string>
     <string name="dock_edit_pick_app">Now choose the app to put there and press OK. Back to choose another place.</string>
-    <string name="tile_add_to_dock">Add to dock</string>
-    <string name="tile_replace_in_dock">Replace with another app</string>
-    <string name="dock_edit_pick_place">Choose the dock place for this app and press OK. Back to cancel.</string>
     <string name="reorder">Reorder apps</string>
     <!-- Top bar VPN shortcuts: named after the apps, they draw the apps' own icons at runtime. -->
     <string name="vpn_byedpi">ByeDPI</string>
     <string name="vpn_wgtunnel">WG Tunnel</string>
     <!-- Sleep timer button: dims the screen when the time comes, never powers the TV off. -->
     <string name="sleep_timer">Sleep timer</string>
-    <string name="sleep_now">Dim screen now</string>
-    <string name="sleep_off">Turn timer off</string>
-    <string name="sleep_never">Don\'t sleep</string>
-    <string name="sleep_15">15 minutes</string>
-    <string name="sleep_30">30 minutes</string>
-    <string name="sleep_45">45 minutes</string>
-    <string name="sleep_60">60 minutes</string>
-    <string name="sleep_90">90 minutes</string>
     <string name="sleep_failed">Couldn\'t dim the screen</string>
     <!-- The last seconds of the sleep timer: a pill over the tiles, any key cancels. -->
-    <string name="sleep_countdown">Screen off in %1$d s</string>
-    <string name="sleep_countdown_hint">Any key cancels the timer</string>
     <!-- Launcher settings: the screen dimmer. -->
     <string name="dim_delay_state">Dimmer: %1$s</string>
     <string name="dim_level_state">Dimming: %1$d%%</string>
-    <string name="dim_ramp_state">Dim fade: %1$s</string>
     <string name="dim_off">off</string>
     <string name="dim_minutes">in %1$d min</string>
-    <string name="dim_seconds">%1$d s</string>
-    <string name="dim_instant">instantly</string>
     <!-- Launcher settings: the weather line's place, typed in or taken from the location services. -->
     <string name="weather_city_state">Weather city: %1$s</string>
     <string name="weather_city_none">not set</string>
@@ -143,7 +113,6 @@
     <string name="tile_move">Move</string>
     <string name="tile_app_profile">App profile</string>
     <string name="drag_exit_banner">Exit drag mode</string>
-    <string name="reorder_hint">OK picks up an app, arrows move it, OK again puts it down. Back ends the mode.</string>
     <string name="reorder_not_saved">Couldn\'t save the new order</string>
     <string name="app_library">App library</string>
     <string name="library_empty">No launchable apps found</string>
@@ -193,17 +162,7 @@
     <string name="clock_color">Overlay clock: on or off</string>
     <string name="clock_corner">Overlay clock: opacity</string>
     <string name="clock_size">Overlay clock: size</string>
-    <string name="clock_color_state">Clock colour: %1$s</string>
-    <string name="clock_corner_state">Clock corner: %1$s</string>
     <string name="clock_size_state">Clock size: %1$d sp</string>
-    <string name="clock_color_white">white</string>
-    <string name="clock_color_grey">grey</string>
-    <string name="clock_color_amber">amber</string>
-    <string name="clock_color_blue">blue</string>
-    <string name="clock_color_red">red</string>
-    <string name="clock_corner_tr">top right</string>
-    <string name="clock_corner_tl">top left</string>
-    <string name="clock_corner_br">bottom right</string>
     <string name="clock_corner_bl">bottom left</string>    <string name="clock_on_state">Overlay clock: %1$s</string>
     <string name="clock_alpha_state">Clock opacity: %1$d%%</string>
     <string name="clock_position">Clock position (arrows, then OK)</string>
@@ -212,11 +171,5 @@
     <string name="clock_font">Overlay clock: font</string>
     <string name="clock_font_state">Font: %1$s</string>
     <string name="oled_shift">OLED pixel shift: %1$s</string>
-    <string name="picture_sound">Picture and sound (TV menu)</string>
-    <string name="picture_key">Picture menu button: %1$s</string>
-    <string name="picture_key_off">off</string>
-    <string name="picture_key_title">Picture menu button</string>
-    <string name="picture_key_warning">Key interception is on: holding the volume keys no longer repeats. Choose off to get it back.</string>
-    <string name="sleep_1">1 минута</string>
     <string name="voice_launch">Голосовой запуск приложений</string>
 </resources>

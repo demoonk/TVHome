@@ -6,7 +6,7 @@
     android:background="#FF000000">
 
     <!-- Time-of-day backdrop, drawn once a minute (config.xml sky_intensity; 0 keeps it hidden). -->
-    <com.gathin.tvhome.SkyView
+    <ru.pda.tvhome.SkyView
         android:id="@+id/sky"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -438,7 +438,7 @@
         </RelativeLayout>
 
         <!-- The wrapper clips at the grid's edge; the grid itself must not clip so scaled tiles can overflow their cells. -->
-        <com.gathin.tvhome.TileViewport
+        <ru.pda.tvhome.TileViewport
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
@@ -458,11 +458,11 @@
                 android:overScrollMode="never"
                 android:scrollbars="none"
                 android:descendantFocusability="afterDescendants" />
-        </com.gathin.tvhome.TileViewport>
+        </ru.pda.tvhome.TileViewport>
     </LinearLayout>
 
     <!-- The single floating glass highlight that springs between tiles. -->
-    <com.gathin.tvhome.GlassView
+    <ru.pda.tvhome.GlassView
         android:id="@+id/glass"
         android:layout_width="10dp"
         android:layout_height="10dp"

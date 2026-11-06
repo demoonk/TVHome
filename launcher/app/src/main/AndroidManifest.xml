@@ -127,29 +127,35 @@
         </provider>
 
         <activity android:name=".SiteSearchActivity" android:exported="false" />
-        <activity android:name="com.gathin.tvhome.WallpaperBrowserActivity" android:exported="false" />
-        <activity android:name="com.gathin.tvhome.VoiceLaunchActivity" android:exported="true"
+        <activity android:name="ru.pda.tvhome.WallpaperBrowserActivity" android:exported="false" />
+        <activity android:name="ru.pda.tvhome.VoiceLaunchActivity" android:exported="true"
             android:launchMode="singleTask" android:excludeFromRecents="true" android:taskAffinity="${applicationId}.voice">
             <intent-filter>
                 <action android:name="android.intent.action.ASSIST" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <service android:name="ru.pda.tvhome.LauncherAssistantService"
+            android:label="@string/app_name" android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
+            <meta-data android:name="android.voice_interaction" android:resource="@xml/launcher_assistant" />
+        </service>
         <service android:name="com.gathin.tvhome.LauncherAssistantService"
             android:label="@string/app_name" android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
             <intent-filter><action android:name="android.service.voice.VoiceInteractionService" /></intent-filter>
             <meta-data android:name="android.voice_interaction" android:resource="@xml/launcher_assistant" />
         </service>
-        <service android:name="com.gathin.tvhome.LauncherAssistantSessionService"
+        <service android:name="ru.pda.tvhome.LauncherAssistantSessionService"
             android:exported="true" android:permission="android.permission.BIND_VOICE_INTERACTION" />
-        <service android:name="com.gathin.tvhome.AssistantRecognitionService"
+        <service android:name="ru.pda.tvhome.AssistantRecognitionService"
             android:exported="true" android:permission="android.permission.BIND_SPEECH_RECOGNITION_SERVICE">
             <intent-filter><action android:name="android.speech.RecognitionService" /></intent-filter>
         </service>
-        <receiver android:name="com.gathin.tvhome.TimerStatusReceiver" android:exported="true" />
+        <receiver android:name="ru.pda.tvhome.TimerStatusReceiver" android:exported="true" />
         <activity
-            android:name="com.gathin.tvhome.MainActivity"
+            android:name="ru.pda.tvhome.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:stateNotNeeded="true"
@@ -171,8 +177,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Compatibility entry points for already installed shell bridges. -->
+        <activity-alias android:name="com.gathin.tvhome.MainActivity"
+            android:targetActivity="ru.pda.tvhome.MainActivity" android:exported="true" />
+        <activity-alias android:name="com.gathin.tvhome.VoiceLaunchActivity"
+            android:targetActivity="ru.pda.tvhome.VoiceLaunchActivity" android:exported="true" />
+
         <receiver
-            android:name="com.gathin.tvhome.BootReceiver"
+            android:name="ru.pda.tvhome.BootReceiver"
             android:exported="true"
             android:directBootAware="true">
             <intent-filter>
@@ -183,7 +195,7 @@
         </receiver>
 
         <activity
-            android:name="com.gathin.tvhome.LauncherSettingsActivity"
+            android:name="ru.pda.tvhome.LauncherSettingsActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:screenOrientation="landscape" />
@@ -193,7 +205,7 @@
              launcher was the only handler of the action (Hisense huangshan, Android TV 10): kept off, a TV with
              its own input picker never sees a second candidate and a chooser. -->
         <activity
-            android:name="com.gathin.tvhome.InputsRequestActivity"
+            android:name="ru.pda.tvhome.InputsRequestActivity"
             android:exported="true"
             android:enabled="false"
             android:excludeFromRecents="true"
@@ -208,7 +220,7 @@
              No screenOrientation: a translucent activity may not request one on Android 8.0 (API 26),
              which throws IllegalStateException in onCreate (#1122); a TV is landscape anyway. -->
         <activity
-            android:name="com.gathin.tvhome.QuickSettingsActivity"
+            android:name="ru.pda.tvhome.QuickSettingsActivity"
             android:exported="false"
             android:taskAffinity=""
             android:launchMode="singleTop"
@@ -216,13 +228,26 @@
             android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen" />
         <activity
-            android:name="com.gathin.tvhome.HomeSettingsActivity"
+            android:name="ru.pda.tvhome.HomeSettingsActivity"
             android:exported="false"
             android:taskAffinity=""
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.NoDisplay" />
         <!-- Home button for remotes that send KEYCODE_ALL_APPS (Xiaomi). Opt-in: HOME_KEY_SERVICE=1
              build-and-install.sh; see HomeKeyService. -->
+        <service
+            android:name="ru.pda.tvhome.HomeKeyService"
+            android:label="@string/home_key_name"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/home_key_service" />
+        </service>
         <service
             android:name="com.gathin.tvhome.HomeKeyService"
             android:label="@string/home_key_name"
@@ -241,6 +266,19 @@
              repeating the volume keys while a service filters them keeps its repeat. Enable this one instead of
              HomeKeyService when no remote buttons are remapped (see HomeRedirectService). -->
         <service
+            android:name="ru.pda.tvhome.HomeRedirectService"
+            android:label="@string/home_key_name"
+            android:directBootAware="true"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/home_redirect_service" />
+        </service>
+        <service
             android:name="com.gathin.tvhome.HomeRedirectService"
             android:label="@string/home_key_name"
             android:directBootAware="true"
@@ -256,7 +294,7 @@
 
         <!-- The same clock, started by Home itself after home_idle_clock_minutes without input. -->
         <activity
-            android:name="com.gathin.tvhome.ClockActivity"
+            android:name="ru.pda.tvhome.ClockActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -265,7 +303,7 @@
         <!-- stock_home_redirect at boot: HomeKeyService opens this invisible activity once, so the screen behind
              it sends a window event when it closes (HomeKeyService.probeAtBoot). -->
         <activity
-            android:name="com.gathin.tvhome.ProbeActivity"
+            android:name="ru.pda.tvhome.ProbeActivity"
             android:exported="false"
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -274,6 +312,16 @@
 
         <!-- Screensaver: pick it in Settings, or `settings put secure screensaver_components
              ru.pda.tvhome/.ClockDream` over adb. -->
+        <service
+            android:name="ru.pda.tvhome.ClockDream"
+            android:label="@string/dream_name"
+            android:exported="true"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
         <service
             android:name="com.gathin.tvhome.ClockDream"
             android:label="@string/dream_name"
@@ -290,6 +338,18 @@
         <!-- The remote's Input button (KEYCODE_TV or KEYCODE_TV_INPUT) opens the input switcher, and input_key_keycodes and
          app_keys (config.xml or a theme) bring back other remote buttons; see InputKeyService. -->
         <service
+            android:name="ru.pda.tvhome.InputKeyService"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/input_key_service" />
+        </service>
+        <service
             android:name="com.gathin.tvhome.InputKeyService"
             android:exported="false"
             android:label="@string/app_name"
@@ -302,7 +362,7 @@
                 android:resource="@xml/input_key_service" />
         </service>
 
-        <service android:name="com.gathin.tvhome.OverlayService" android:exported="false"
+        <service android:name="ru.pda.tvhome.OverlayService" android:exported="false"
             android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-enabled floating clock and sleep timer" />
@@ -310,7 +370,10 @@
 
         <!-- Wakes at the sleep timer's deadline and dims the screen (SleepTimer / SleepReceiver). -->
         <receiver
-            android:name="com.gathin.tvhome.SleepReceiver"
+            android:name="ru.pda.tvhome.SleepReceiver"
             android:exported="false" />
+        <receiver android:name=".PackageUpgradeReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+        </receiver>
     </application>
 </manifest>

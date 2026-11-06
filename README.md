@@ -1,5 +1,10 @@
 # TVHome
 
+## Версия 2.0.0
+
+Обновление устанавливается поверх TVHome 1.x с сохранением данных и исходной подписи. Изменены поиск, возврат из приложений и восстановление селектора; основные Java-классы перенесены в `ru.pda.tvhome`. Подробности совместимости, необязательный мостик физической кнопки Back и откат описаны в [переходе на 2.0.0](docs/migration-2.0.0.md).
+
+
 Лаунчер для Android TV (Chiq-based TV, Dexp, Tuvio). Личный форк [CleanYourTV](https://github.com/Gathin23/cleanyourtv), MIT.
 
 ![Главный экран TVHome / Main screen](docs/screenshots/00-home.png)
@@ -40,25 +45,25 @@
 Windows, PowerShell:
 
 ```powershell
-.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-1.4.23.apk" -Adb "C:\platform-tools\adb.exe"
+.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.0.apk" -Adb "C:\platform-tools\adb.exe"
 ```
 
 macOS / Linux:
 
 ```sh
-sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-1.4.23.apk" "./platform-tools/adb"
+sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.0.apk" "./platform-tools/adb"
 ```
 
-Если PowerShell блокирует запуск скачанного скрипта, после проверки его содержимого можно выполнить один запуск через `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-1.4.23.apk" -Adb "C:\platform-tools\adb.exe"`. Этот параметр не меняет постоянную политику выполнения системы.
+Если PowerShell блокирует запуск скачанного скрипта, после проверки его содержимого можно выполнить один запуск через `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.0.apk" -Adb "C:\platform-tools\adb.exe"`. Этот параметр не меняет постоянную политику выполнения системы.
 
-Скрипты требуют явного выбора устройства, проверяют доступ к ADB и API 26+, сохраняют доступный установленный APK в `backups/`, выполняют `install -r` и открывают `ru.pda.tvhome/com.gathin.tvhome.MainActivity` только после `Success`. Ошибка установки останавливает скрипт. Данные не очищаются; штатный Home не отключается, настройки по умолчанию и службы доступности не меняются. Выберите Home через системные настройки самостоятельно. Не используйте старый upstream-скрипт `build-and-install`: для отдельного репозитория TVHome предназначены эти самостоятельные установщики.
+Скрипты требуют явного выбора устройства, проверяют доступ к ADB и API 26+, сохраняют доступный установленный APK в `backups/`, выполняют `install -r` и открывают `ru.pda.tvhome/ru.pda.tvhome.MainActivity` только после `Success`. Ошибка установки останавливает скрипт. Данные не очищаются; штатный Home не отключается, настройки по умолчанию и службы доступности не меняются. Выберите Home через системные настройки самостоятельно. Не используйте старый upstream-скрипт `build-and-install`: для отдельного репозитория TVHome предназначены эти самостоятельные установщики.
 
 Ручная альтернатива из папки Platform-Tools:
 
 ```powershell
 .\adb.exe connect TV_ADDRESS:PORT
-.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-1.4.23.apk"
-.\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/com.gathin.tvhome.MainActivity
+.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-2.0.0.apk"
+.\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/ru.pda.tvhome.MainActivity
 ```
 
 Для macOS/Linux замените `.\adb.exe` на `./adb`. При ошибке `install` не продолжайте запуск. После установки отключите отладку в настройках ТВ и отзовите разрешения отладки. `backups/` содержит APK, а не резервную копию настроек; возврат старой версии по-прежнему зависит от ограничений Android, описанных ниже.
@@ -105,25 +110,25 @@ Download the APK and `install.ps1` or `install.sh` from the [latest release](htt
 Windows PowerShell:
 
 ```powershell
-.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-1.4.23.apk" -Adb "C:\platform-tools\adb.exe"
+.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.0.apk" -Adb "C:\platform-tools\adb.exe"
 ```
 
 macOS / Linux:
 
 ```sh
-sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-1.4.23.apk" "./platform-tools/adb"
+sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.0.apk" "./platform-tools/adb"
 ```
 
-If PowerShell blocks a downloaded script, review its contents and use a single invocation with `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-1.4.23.apk" -Adb "C:\platform-tools\adb.exe"`. This does not change the persistent system execution policy.
+If PowerShell blocks a downloaded script, review its contents and use a single invocation with `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.0.apk" -Adb "C:\platform-tools\adb.exe"`. This does not change the persistent system execution policy.
 
-The scripts require an explicit device, check ADB authorization and API 26+, back up any discoverable installed APK to `backups/`, run `install -r`, and launch `ru.pda.tvhome/com.gathin.tvhome.MainActivity` only after installation reports `Success`. Installation errors stop the script. They do not clear app data, disable the stock Home, change default apps or modify accessibility services. Choose the Home app in system Settings yourself. Use these standalone installers for this repository rather than the legacy upstream `build-and-install` script.
+The scripts require an explicit device, check ADB authorization and API 26+, back up any discoverable installed APK to `backups/`, run `install -r`, and launch `ru.pda.tvhome/ru.pda.tvhome.MainActivity` only after installation reports `Success`. Installation errors stop the script. They do not clear app data, disable the stock Home, change default apps or modify accessibility services. Choose the Home app in system Settings yourself. Use these standalone installers for this repository rather than the legacy upstream `build-and-install` script.
 
 Manual alternative from the Platform-Tools directory:
 
 ```powershell
 .\adb.exe connect TV_ADDRESS:PORT
-.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-1.4.23.apk"
-.\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/com.gathin.tvhome.MainActivity
+.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-2.0.0.apk"
+.\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/ru.pda.tvhome.MainActivity
 ```
 
 On macOS/Linux use `./adb` instead of `.\adb.exe`. Do not continue to launch after a failed installation. Afterwards, turn off debugging and revoke debugging authorizations in the TV's Settings. `backups/` contains APKs, not app-setting backups; downgrades remain subject to the Android restrictions below.
@@ -169,7 +174,7 @@ cd launcher
 Пример схемы (SHA-256 нужно заменить фактическим):
 
 ```json
-{"versionCode":72,"versionName":"1.4.23","apkName":"TVHome-1.4.23.apk","sha256":"<64 hexadecimal characters>"}
+{"versionCode":77,"versionName":"2.0.0","apkName":"TVHome-2.0.0.apk","sha256":"<64 hexadecimal characters>"}
 ```
 
 Приложение читает Releases API без авторизации; токенов GitHub внутри APK нет. Проверяются SHA-256, packageName, повышение versionCode и совпадение сертификатов подписи перед передачей APK системному установщику.
@@ -180,7 +185,7 @@ cd launcher
 
 Since 1.4.21, say “Алиса, <message>” to open Alice in Yandex Browser and automatically submit the message. “Алиса” alone opens the page without sending a message. The message is not interpreted as a local TV command. Yandex Browser for TV is preferred; the Android Yandex Browser package is also supported.
 
-С версии 1.4.23 анимация при нажатии плитки отключена: приложение открывается сразу. Обратный переход при возврате сохранён. Пружинная обводка навигации сохранена и учитывает масштаб активных кнопок. Since 1.4.23, apps open immediately without a tile launch animation. The return transition is preserved. The spring navigation outline remains and follows the actual scaled button bounds.
+В 2.0.0 отключена и анимация возврата приложения в плитку. Пружинная обводка навигации сохранена; при запуске выбирается первая плитка, при возвращении — запомненное приложение. In 2.0.0 the return-to-tile animation is removed too. Spring navigation remains; cold starts select the first tile and returning restores the remembered app.
 
 ## Возможности форка
 
@@ -188,6 +193,6 @@ Since 1.4.21, say “Алиса, <message>” to open Alice in Yandex Browser an
 
 ## Проверка
 
-Для 1.4.23 выполняются `testReleaseUnitTest`, `lintRelease`, `assembleRelease`. Код проверки обновлений покрыт JVM-тестами правил URL, имени APK и SHA-256. Проверка визуального интерфейса и установки обновления на реальном ТВ обязательна отдельно.
+Для 2.0.0 выполнены `testReleaseUnitTest`, `lintRelease`, `assembleRelease`. Код проверки обновлений покрыт JVM-тестами правил URL, имени APK и SHA-256. Проверка визуального интерфейса и установки обновления на реальном ТВ обязательна отдельно.
 
 Проверка установщиков / Installer checks: `python -m unittest discover -s tests -v` (PowerShell и Bash запускаются с подставным ADB; телевизор не меняется / fake ADB, no TV changes).

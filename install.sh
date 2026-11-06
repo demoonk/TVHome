@@ -28,7 +28,7 @@ esac
 installed=$("$adb" -s "$device" install -r "$apk")
 printf '%s\n' "$installed"
 printf '%s\n' "$installed" | tr -d '\r' | grep -q '^Success$' || { echo 'Installation did not report Success; launch aborted' >&2; exit 1; }
-started=$("$adb" -s "$device" shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME -n ru.pda.tvhome/com.gathin.tvhome.MainActivity)
+started=$("$adb" -s "$device" shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME -n ru.pda.tvhome/ru.pda.tvhome.MainActivity)
 printf '%s\n' "$started"
 if printf '%s\n' "$started" | grep -Ei '^Error:|Exception' >/dev/null; then echo 'APK installed but TVHome could not start' >&2; exit 1; fi
 echo 'TVHome installed. Select the default Home in system Settings if needed. App data was preserved by install -r.'

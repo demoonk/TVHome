@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace 'com.gathin.tvhome'
+    namespace 'ru.pda.tvhome'
     compileSdk 34
 
     defaultConfig {
@@ -11,8 +11,8 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('ru.pda.tvhome')
         minSdk 26
         targetSdk 34
-        versionCode 72
-        versionName '1.4.23'
+        versionCode 77
+        versionName '2.0.0'
     }
 
     signingConfigs {

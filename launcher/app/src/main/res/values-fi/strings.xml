@@ -6,7 +6,6 @@
     <string name="settings">Asetukset</string>
     <string name="choose_input">Lähteet</string>
     <string name="connected">Yhdistetty</string>
-    <string name="standby">Valmiustila</string>
     <string name="not_connected">Ei laitetta</string>
     <string name="live_tv">TV-kanavat</string>
     <string name="no_inputs">Lähteitä ei löytynyt</string>
@@ -27,12 +26,7 @@
     <string name="home_settings_help">Valitse alkuperäinen kotinäkymä, jos haluat lopettaa CleanYourTV:n käytön kotinäkymänä, tai CleanYourTV palataksesi siihen. Alkuperäisen käynnistimen on oltava käytössä ja television on tarjottava kotinäkymän valinta. Jos käynnistin on poistettu käytöstä, aja ensin palautusskripti.</string>
     <string name="launcher_settings">Käynnistimen asetukset</string>
     <string name="columns_label">Sovelluksia rivillä</string>
-    <string name="dock_opacity_label">Telakkapalkin peittävyys</string>
     <string name="animations_state">Animaatiot: %1$s</string>
-    <string name="advanced_effects">Lisätehosteet</string>
-    <string name="advanced_effects_state">Lisätehosteet: %1$s</string>
-    <string name="advanced_effects_warning">Lisää ruudun noston, kuvakkeen zoomauksen ja pehmeät värisiirtymät. Voi lisätä muistinkäyttöä; todellinen ero riippuu televisiosta.</string>
-    <string name="follow_theme">Noudata teemaa (nollaa televisiossa tehdyt valinnat)</string>
     <string name="follow_theme_hint">Käyttää nykyisen teeman tai sisäänrakennettuja asettelu- ja liikeasetuksia. Teeman lähettäminen tai nollaaminen poistaa myös televisiossa tehdyt valinnat.</string>
     <string name="tv_settings">Television järjestelmäasetukset</string>
     <string name="quick_picture">Näyttö</string>
@@ -41,7 +35,6 @@
     <string name="quick_apps_hint">Ota uudelleen käyttöön</string>
     <string name="on">Päällä</string>
     <string name="off">Pois</string>
-    <string name="enable">Ota käyttöön</string>
     <string name="input_key_service_description">Avaa lähteen valinnan, kun kaukosäätimen lähdepainiketta painetaan.</string>
     <string name="home_key_name">Koti-painike</string>
     <string name="home_key_description">Kaukosäätimen Koti-painike avaa tämän käynnistimen.</string>
@@ -70,7 +63,6 @@
     <string name="stats_storage">Tallennustilaa vapaana %1$s</string>
     <string name="reorder">Järjestä sovellukset</string>
     <string name="tile_move">Siirrä</string>
-    <string name="reorder_hint">OK nostaa sovelluksen, nuolet siirtävät sitä ja Takaisin laskee sen paikalleen. Lopeta painamalla Takaisin uudelleen.</string>
     <string name="reorder_not_saved">Uutta järjestystä ei voitu tallentaa</string>
     <string name="app_library">Sovelluskirjasto</string>
     <string name="library_empty">Käynnistettäviä sovelluksia ei löytynyt</string>
@@ -87,10 +79,6 @@
         <item quantity="one">%1$d sovellus</item>
         <item quantity="other">%1$d sovellusta</item>
     </plurals>
-    <string name="dock_edit">Muokkaa telakkaa</string>
     <string name="dock_edit_hint">Valitse muutettava telakan paikka ja paina OK. Takaisin lopettaa.</string>
     <string name="dock_edit_pick_app">Valitse nyt sinne tuleva sovellus ja paina OK. Takaisin valitsee toisen paikan.</string>
-    <string name="tile_add_to_dock">Lisää telakkaan</string>
-    <string name="tile_replace_in_dock">Korvaa toisella sovelluksella</string>
-    <string name="dock_edit_pick_place">Valitse telakan paikka tälle sovellukselle ja paina OK. Takaisin peruuttaa.</string>
 </resources>

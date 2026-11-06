@@ -63,7 +63,7 @@ class InstallersTest(unittest.TestCase):
         result, calls = self.scenario(kind)
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn("install -r ", calls)
-        self.assertIn("ru.pda.tvhome/com.gathin.tvhome.MainActivity", calls)
+        self.assertIn("ru.pda.tvhome/ru.pda.tvhome.MainActivity", calls)
         for forbidden in ["uninstall", "disable-user", "pm clear", "set-home-activity", "force-stop"]:
             self.assertNotIn(forbidden, calls)
 

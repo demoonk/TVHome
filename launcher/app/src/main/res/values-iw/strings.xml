@@ -6,7 +6,6 @@
     <string name="settings">הגדרות</string>
     <string name="choose_input">כניסות</string>
     <string name="connected">מחובר</string>
-    <string name="standby">בהמתנה</string>
     <string name="not_connected">אין מכשיר</string>
     <string name="live_tv">שידור חי</string>
     <string name="no_inputs">לא נמצאו כניסות</string>
@@ -29,17 +28,11 @@
     <string name="home_settings_help">כדי להפסיק להשתמש ב־CleanYourTV כמסך הבית, יש לבחור במסך הבית המקורי. כדי לחזור, יש לבחור ב־CleanYourTV. מפעיל מסך הבית המקורי חייב להיות פעיל, והטלוויזיה צריכה לתמוך בבחירת מסך בית. אם הוא הושבת, יש להפעיל תחילה את סקריפט השחזור.</string>
     <string name="launcher_settings">הגדרות מסך הבית</string>
     <string name="columns_label">אפליקציות בשורה</string>
-    <string name="dock_opacity_label">אטימות פס ה-Dock</string>
     <string name="animations_state">הנפשות: %1$s</string>
-    <string name="advanced_effects">אפקטים מתקדמים</string>
-    <string name="advanced_effects_state">אפקטים מתקדמים: %1$s</string>
-    <string name="advanced_effects_warning">מוסיף אריח מוגבה, הגדלת סמלים ומעברי צבע חלקים. עשוי להגדיל את צריכת הזיכרון; ההבדל בפועל תלוי בטלוויזיה.</string>
-    <string name="follow_theme">לפי ערכת הנושא (איפוס הבחירות בטלוויזיה)</string>
     <string name="follow_theme_hint">שימוש בהגדרות הפריסה וההנפשה של ערכת הנושא הנוכחית או בהגדרות המובנות. העברה או איפוס של ערכת נושא מאפסים גם את הבחירות בטלוויזיה.</string>
     <string name="tv_settings">הגדרות מערכת הטלוויזיה</string>
     <string name="on">פעיל</string>
     <string name="off">כבוי</string>
-    <string name="enable">הפעלה</string>
     <string name="input_key_service_description">פותח את בורר הכניסות בלחיצה על כפתור הכניסות בשלט.</string>
     <string name="home_key_name">כפתור הבית</string>
     <string name="home_key_description">גורם לכפתור הבית בשלט לפתוח את מסך הבית הזה.</string>
@@ -66,27 +59,14 @@
     <string name="quick_network">רשת</string>
     <string name="quick_apps">אפליקציות</string>
     <string name="quick_apps_hint">הפעלה מחדש</string>
-    <string name="dock_edit">עריכת שורת המועדפים</string>
     <string name="dock_edit_hint">בחרו מקום בשורת המועדפים ולחצו אישור. חזרה לסיום.</string>
     <string name="dock_edit_pick_app">עכשיו בחרו את האפליקציה שתופיע שם ולחצו אישור. חזרה לבחירת מקום אחר.</string>
-    <string name="tile_add_to_dock">הוספה לשורת המועדפים</string>
-    <string name="tile_replace_in_dock">החלפה באפליקציה אחרת</string>
-    <string name="dock_edit_pick_place">בחרו מקום בשורת המועדפים לאפליקציה הזו ולחצו אישור. חזרה לביטול.</string>
     <string name="reorder">סידור אפליקציות</string>
     <string name="vpn_byedpi">ByeDPI</string>
     <string name="vpn_wgtunnel">WG Tunnel</string>
     <string name="sleep_timer">טיימר שינה</string>
-    <string name="sleep_now">לכבות מסך עכשיו</string>
-    <string name="sleep_off">לכבות את הטיימר</string>
-    <string name="sleep_never">ללא שינה</string>
-    <string name="sleep_15">15 דקות</string>
-    <string name="sleep_30">30 דקות</string>
-    <string name="sleep_45">45 דקות</string>
-    <string name="sleep_60">60 דקות</string>
-    <string name="sleep_90">90 דקות</string>
     <string name="sleep_failed">לא ניתן לכבות את המסך</string>
     <string name="tile_move">העברה</string>
-    <string name="reorder_hint">אישור מרים אפליקציה, החצים מזיזים אותה, חזרה מניחה אותה. חזרה שוב לסיום.</string>
     <string name="reorder_not_saved">לא ניתן לשמור את הסדר החדש</string>
     <string name="app_library">ספריית אפליקציות</string>
     <string name="library_empty">לא נמצאו אפליקציות שניתן לפתוח</string>
@@ -106,11 +86,6 @@
     </plurals>
     <string name="greeting_with_name">%1$s, %2$s</string>
     <string name="rows_below_dock_label">שורות מתחת לעגינה</string>
-    <string name="wallpaper_label">טפט</string>
-    <string name="wallpaper_state">טפט: %1$s</string>
-    <string name="wallpaper_none">ללא</string>
-    <string name="wallpaper_applied">הטפט שונה</string>
-    <string name="wallpaper_theme_default">ברירת המחדל של ערכת הנושא</string>
 
     <!-- Race-weekend panel (RaceWeekend). -->
     <string name="race_kicker">סבב %1$d · %2$s · %3$s</string>
