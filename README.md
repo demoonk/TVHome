@@ -2,6 +2,14 @@
 
 Лаунчер для Android TV (Chiq-based TV, Dexp, Tuvio). Личный форк [CleanYourTV](https://github.com/Gathin23/cleanyourtv), MIT.
 
+## Скриншоты / Screenshots
+
+[Галерея: 9 снимков с настоящего ТВ и настройки кратко / Nine real TV screenshots and a brief settings guide](docs/screenshots/README.md)
+
+| Поиск «Терминатор» / Search | Оформление / Appearance | Помощь / Help |
+|---|---|---|
+| ![Поиск Терминатор](docs/screenshots/09-terminator-search.png) | ![Оформление](docs/screenshots/02-appearance-settings.png) | ![Помощь](docs/screenshots/08-help-and-update-check.png) |
+
 ## Установка и обновления — русский
 
 Требуется Android TV / Google TV **Android 8.0 и новее (API 26)**. Идентификатор приложения: **`ru.pda.tvhome`**. Совместимость выбора Home и кнопок пульта зависит от прошивки. Штатный лаунчер должен оставаться включённым: это позволяет безопасно вернуться к нему.
