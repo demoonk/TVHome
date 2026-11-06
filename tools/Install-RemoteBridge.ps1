@@ -46,7 +46,7 @@ if (Test-Path -LiteralPath $guard -PathType Leaf) {
     $guardPid = (& $adbPath -s $Device shell cat /data/local/tmp/assistant-package-guard.pid 2>$null | Out-String).Trim()
     if ($guardPid -match '^\d+$') {
         $guardCommand = (& $adbPath -s $Device shell cat "/proc/$guardPid/cmdline" 2>$null | Out-String)
-        if ($guardCommand -match 'sh /data/local/tmp/assistant-package-guard.sh') { Invoke-Target "kill $guardPid" | Out-Null }
+        if ($guardCommand.Replace([char]0, [char]32) -match 'sh /data/local/tmp/assistant-package-guard.sh') { Invoke-Target "kill $guardPid" | Out-Null }
     }
     & $adbPath -s $Device push $guard /data/local/tmp/assistant-package-guard.sh
     if ($LASTEXITCODE -ne 0) { throw 'Assistant guard upload failed' }
