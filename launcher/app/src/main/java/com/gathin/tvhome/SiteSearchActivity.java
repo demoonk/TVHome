@@ -16,11 +16,14 @@ public final class SiteSearchActivity extends Activity {
     private final android.os.Handler main=new android.os.Handler(android.os.Looper.getMainLooper());
     private boolean openContent(MediaVoiceApps.App app,android.net.Uri uri){
         if(!SiteSearch.content(app.id,uri))return false;
-        if(!active||!hasWindowFocus())return true;
+        if(!active||isFinishing()||isDestroyed())return true;
         if(opening)return true;
         Intent intent=new Intent(Intent.ACTION_VIEW,uri).setPackage(app.pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         if(intent.resolveActivity(getPackageManager())==null){Toast.makeText(this,"Приложение не поддерживает эту ссылку",Toast.LENGTH_LONG).show();return true;}
-        returnFromContent=true;opening=true;LaunchAnimation.open(this,web,intent,()->{setResult(RESULT_OK);finish();});main.postDelayed(()->opening=false,700);return true;
+        opening=true;
+        try{startActivity(intent);setResult(RESULT_OK);finish();overridePendingTransition(0,0);}
+        catch(RuntimeException unavailable){opening=false;android.util.Log.w("SearchLaunch","Could not open content in "+app.pkg,unavailable);Toast.makeText(this,"Не удалось открыть в "+app.label,Toast.LENGTH_LONG).show();}
+        return true;
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);returnFromContent=state!=null&&state.getBoolean("return_from_content",false);MediaVoiceApps.App app=MediaVoiceApps.byId(getIntent().getStringExtra("source"));

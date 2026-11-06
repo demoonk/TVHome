@@ -74,6 +74,7 @@ public class HomeRedirectService extends AccessibilityService {
     private boolean lastInOwnSettings;
     /** Redraws the clock as soon as its settings change while an app is on screen. */
     private BroadcastReceiver clockChangedReceiver;
+    private BroadcastReceiver screenReceiver;
     private long lastActivity;
     private final Runnable sleepTick = new Runnable() {
         @Override
@@ -167,6 +168,23 @@ public class HomeRedirectService extends AccessibilityService {
             } else {
                 registerReceiver(clockChangedReceiver, filter);
             }
+        }
+        if (screenReceiver == null) {
+            screenReceiver = new BroadcastReceiver() {
+                @Override public void onReceive(Context context, Intent intent) {
+                    if (sleepWarning != null) sleepWarning.hide();
+                    if (Intent.ACTION_SCREEN_ON.equals(intent.getAction())
+                            || Intent.ACTION_USER_PRESENT.equals(intent.getAction())) {
+                        SleepTimer.touch(HomeRedirectService.this);
+                    }
+                }
+            };
+            IntentFilter screen = new IntentFilter(Intent.ACTION_SCREEN_ON);
+            screen.addAction(Intent.ACTION_SCREEN_OFF);
+            screen.addAction(Intent.ACTION_USER_PRESENT);
+            if (Build.VERSION.SDK_INT >= 33)
+                registerReceiver(screenReceiver, screen, Context.RECEIVER_NOT_EXPORTED);
+            else registerReceiver(screenReceiver, screen);
         }
         // Whatever is on screen right now gets the clock without waiting for the next window change.
         updateClockOverlay(foregroundPackage());
@@ -329,6 +347,8 @@ public class HomeRedirectService extends AccessibilityService {
     /** Once a second: hold the countdown while audio plays, dim the screen when it runs out. */
     private void tickSleep() {
         if (sleepWarning == null) sleepWarning = new SleepWarningOverlay(this);
+        android.os.PowerManager power = getSystemService(android.os.PowerManager.class);
+        if (power != null && !power.isInteractive()) { sleepWarning.hide(); return; }
         if (!SleepTimer.armed(this)) { sleepWarning.hide(); return; }
         AudioManager audio = getSystemService(AudioManager.class);
         if (audio != null && audio.isMusicActive()) {
@@ -380,6 +400,14 @@ public class HomeRedirectService extends AccessibilityService {
         if (sleepService == this) sleepService = null;
         if (sleepWarning != null) sleepWarning.hide();
         stopWaitingForUnlock();
+        if (clockChangedReceiver != null) {
+            try { unregisterReceiver(clockChangedReceiver); } catch (IllegalArgumentException ignored) {}
+            clockChangedReceiver = null;
+        }
+        if (screenReceiver != null) {
+            try { unregisterReceiver(screenReceiver); } catch (IllegalArgumentException ignored) {}
+            screenReceiver = null;
+        }
         sleepHandler.removeCallbacks(sleepTick);
         if (clockOverlay != null && clockOverlay.getParent() != null) windowManager().removeView(clockOverlay);
         super.onDestroy();

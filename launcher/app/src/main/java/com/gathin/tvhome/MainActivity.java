@@ -408,8 +408,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private final BroadcastReceiver timeReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (OverlayService.ACTION_WAKE.equals(intent.getAction())) {
-                if (dimmed) undim(true);
+            if (OverlayService.ACTION_WAKE.equals(intent.getAction()) || Intent.ACTION_SCREEN_ON.equals(intent.getAction()) || Intent.ACTION_USER_PRESENT.equals(intent.getAction())) {
+                undim(true);
                 restartIdleClock();
                 armDim();
                 return;
@@ -965,6 +965,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         packageFilter.addDataScheme("package");
         timeFilter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
         timeFilter.addAction(OverlayService.ACTION_WAKE);
+        timeFilter.addAction(Intent.ACTION_SCREEN_ON);
+        timeFilter.addAction(Intent.ACTION_USER_PRESENT);
         // Registered for the activity's whole life, not only while it is started: an app installed or updated while
         // another app is in front must still mark the tiles stale, or Home would have to rebuild on every return.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -1064,7 +1066,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        if (dimmed) undim(true);   // the remote's Home reaches us through the accessibility service
+        OverlayService.wake();
+        undim(true);   // Home must also remove a stale scrim whose animator was interrupted
         // The sleep timer's 15-second heads-up: show the countdown, whatever else brought Home forward.
         if (intent != null && intent.getBooleanExtra(EXTRA_SLEEP_WARN, false)
                 && SleepTimer.deadline(this) > 0) {
@@ -1105,6 +1108,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        OverlayService.wake();
+        undim(false);
         updateForeground = true;
         refreshUpdateButton();
         AppUpdates.start(this, false);
@@ -1471,23 +1476,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** Back to full brightness, and (unless Home is going away) the dim countdown starts again. */
     private void undim(boolean rearm) {
         root.removeCallbacks(dimNow);
-        if (!dimmed) {
-            if (rearm) armDim();
-            return;
-        }
-        dimmed = false;
-        if (rearm) {
-            armDim();
-            if (dimOled) wallpaperPlayer.start();
-        }
-        dimScrim.animate().cancel();
-        dimScrim.animate().alpha(0f).setDuration(300L)
-                .withEndAction(() -> {
-                    if (!dimmed) dimScrim.setVisibility(View.GONE);
-                })
-                .start();
-        if (headerFocus != null) headerFocus.animate().alpha(1f).setDuration(300L).start();
-        if (glass != null) glass.animate().alpha(1f).setDuration(300L).start();
+        boolean wasDimmed=dimmed;
+        dimmed=false;
+        // A paused Activity can stop an animator before its end action hides the black layer.
+        // Clear the actual view even when the boolean has already been reset.
+        if(dimScrim!=null){dimScrim.animate().cancel();dimScrim.setAlpha(0f);dimScrim.setVisibility(View.GONE);}
+        if(headerFocus!=null){headerFocus.animate().cancel();headerFocus.setAlpha(1f);}
+        if(glass!=null){glass.animate().cancel();glass.setAlpha(1f);}
+        if(rearm){armDim();if(wasDimmed&&dimOled&&wallpaperPlayer!=null)wallpaperPlayer.start();}
     }
 
     @Override

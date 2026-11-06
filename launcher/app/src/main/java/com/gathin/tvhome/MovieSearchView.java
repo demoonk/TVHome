@@ -188,7 +188,12 @@ final class MovieSearchView extends LinearLayout {
             return true;
         });
         card.setOnClickListener(v -> {
-            try { LaunchAnimation.open(activity,card,hit.intent,activity::finish); }
+            try {
+                // Keep the launch in the actual user click; an animation callback is too late on some TV firmwares.
+                activity.startActivity(hit.intent);
+                activity.finish();
+                activity.overridePendingTransition(0,0);
+            }
             catch (RuntimeException unavailable) { Toast.makeText(activity, "Не удалось открыть в " + appName, Toast.LENGTH_SHORT).show(); }
         });
         if (hit.poster != null) loadPoster(image, hit.poster);

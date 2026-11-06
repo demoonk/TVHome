@@ -33,6 +33,11 @@ public final class OverlayService extends Service {
     static final String ACTION_WAKE = "com.gathin.tvhome.action.OVERLAY_WAKE";
     private static OverlayService instance;
 
+    static boolean wake() {
+        if(instance==null||instance.sleepScrim==null)return false;
+        instance.dismissSleep();return true;
+    }
+
     static boolean sleepNow() {
         return instance != null && instance.showSleep();
     }
@@ -109,7 +114,7 @@ public final class OverlayService extends Service {
         }
         screenChanged = new BroadcastReceiver() {
             @Override public void onReceive(Context context, Intent intent) {
-                boolean waking = Intent.ACTION_SCREEN_ON.equals(intent.getAction());
+                boolean waking = Intent.ACTION_SCREEN_ON.equals(intent.getAction())||Intent.ACTION_USER_PRESENT.equals(intent.getAction());
                 dismissSleep(false);
                 if (warning != null) warning.hide();
                 SleepTimer.touch(OverlayService.this);
@@ -118,6 +123,7 @@ public final class OverlayService extends Service {
         };
         IntentFilter screenFilter = new IntentFilter(Intent.ACTION_SCREEN_ON);
         screenFilter.addAction(Intent.ACTION_SCREEN_OFF);
+        screenFilter.addAction(Intent.ACTION_USER_PRESENT);
         if (android.os.Build.VERSION.SDK_INT >= 33)
             registerReceiver(screenChanged, screenFilter, Context.RECEIVER_NOT_EXPORTED);
         else registerReceiver(screenChanged, screenFilter);
@@ -282,12 +288,15 @@ public final class OverlayService extends Service {
      * does not give apps, so this is the quiet equivalent.
      */
     private boolean showSleep() {
+        android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
+        if(power!=null&&!power.isInteractive())return false;
         if (sleepScrim != null) return true;
         sleepScrim = new View(this);
         sleepScrim.setBackgroundColor(0xFF000000);
         sleepScrim.setFocusableInTouchMode(true);
+        sleepScrim.setOnTouchListener((v,event)->{dismissSleep();return true;});
         sleepScrim.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_UP) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN || event.getAction() == KeyEvent.ACTION_UP) {
                 dismissSleep();
                 return true;
             }
@@ -320,7 +329,7 @@ public final class OverlayService extends Service {
     private void dismissSleep(boolean wakeLauncher) {
         if (sleepScrim == null) return;
         try {
-            windowManager.removeView(sleepScrim);
+            windowManager.removeViewImmediate(sleepScrim);
         } catch (RuntimeException ignored) {
             // Already gone.
         }
