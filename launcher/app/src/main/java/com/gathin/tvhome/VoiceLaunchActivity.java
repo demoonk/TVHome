@@ -93,7 +93,20 @@ public final class VoiceLaunchActivity extends Activity {
         route(words);
     }
 
+    private void openAlice(String query){
+        android.net.Uri address=android.net.Uri.parse(VoiceAliceCommand.url(query));
+        for(String pkg:new String[]{"com.yandex.browser.tv","com.yandex.browser"}){
+            Intent open=new Intent(Intent.ACTION_VIEW,address).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if(open.resolveActivity(getPackageManager())==null)continue;
+            try{startActivity(open);finish();return;}
+            catch(RuntimeException unavailable){android.util.Log.w("VoiceAlice","Yandex Browser launch failed",unavailable);}
+        }
+        fail("Яндекс Браузер не установлен или не поддерживает открытие Алисы");
+    }
+
     private void route(ArrayList<String> words) {
+        String aliceQuery=VoiceAliceCommand.parse(words.get(0));
+        if(aliceQuery!=null){openAlice(aliceQuery);return;}
         switch (VoiceTvCommand.parse(words.get(0))) {
             case OFF:
                 if (!SleepTimer.fireNow(this)) fail(getString(R.string.sleep_failed));

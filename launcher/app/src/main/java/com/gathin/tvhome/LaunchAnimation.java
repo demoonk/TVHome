@@ -50,7 +50,7 @@ final class LaunchAnimation {
         View root = (View) image.getParent();
         image.animate().x(0).y(0)
                 .scaleX((float) root.getWidth() / tile.getWidth())
-                .scaleY((float) root.getHeight() / tile.getHeight()).alpha(0).setDuration(500)
+                .scaleY((float) root.getHeight() / tile.getHeight()).alpha(0).setDuration(167)
                 .setInterpolator(new android.view.animation.AccelerateInterpolator())
                 .withEndAction(() -> {
                     if (states.get(activity) != state || state.completing) return;
