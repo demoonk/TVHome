@@ -13,37 +13,45 @@
 3. Запустите TVHome. Откройте системные **Настройки → Приложения → Приложения по умолчанию → Главный экран / Home** и выберите TVHome. На некоторых телевизорах выбор предлагается при нажатии Home. Названия пунктов зависят от прошивки. Если выбора нет, оставьте текущий Home и запускайте TVHome как приложение; не отключайте штатные пакеты ради замены главного экрана.
 4. Проверьте Home, переходы стрелками, открытие приложений и системных настроек. Сохраните доступ к системным настройкам для возврата к штатному Home.
 
-На телевизоре с **1.4.18 или ниже первый APK 1.4.19 нужно установить вручную поверх имеющейся версии**. Установка поверх приложения с тем же package и тем же ключом подписи сохраняет его данные и настройки. APK с другим ключом не является совместимым обновлением: при отказе установщика сохраните текст ошибки и используйте сборку с исходной подписью, не удаляя приложение и не очищая данные.
+На телевизоре с **1.4.18 или ниже установите последнюю версию (1.4.19 или новее) вручную поверх имеющейся**; промежуточные версии устанавливать не нужно. Установка поверх приложения с тем же package и тем же ключом подписи сохраняет его данные и настройки. APK с другим ключом не является совместимым обновлением: при отказе установщика сохраните текст ошибки и используйте сборку с исходной подписью, не удаляя приложение и не очищая данные.
 
-### Альтернатива: установка с компьютера через ADB
+### Установка с компьютера: проверенные скрипты и ADB
 
-Скачайте официальный [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools) для Windows, macOS или Linux и распакуйте весь архив. Android Studio и Java для установки готового APK не нужны. Включите на ТВ режим разработчика (обычно семь нажатий на номер сборки) и доступную в прошивке отладку ADB. Подключайте свой компьютер и ТВ в доверенной локальной сети; подтвердите запрос отладки на экране ТВ.
+Скачайте официальный [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools) и распакуйте весь архив. Android Studio и Java для установки APK не нужны. Включите на ТВ отладку ADB и подтвердите подключение вашего компьютера. При беспроводной отладке сначала выполните `adb pair TV_ADDRESS:PAIRING_PORT`, затем используйте отдельный **порт подключения**. При USB используйте серийный номер из `adb devices`.
 
-В примерах `TV_ADDRESS:PORT` замените адресом и портом, показанными телевизором, а имя APK — именем скачанного файла. При беспроводной отладке с кодом сначала выполните `adb pair TV_ADDRESS:PAIRING_PORT`, введите код ТВ, затем подключитесь к **порту подключения**, который может отличаться от порта сопряжения. Для обычного сетевого ADB используйте порт своей прошивки.
+Скачайте из [последнего релиза](https://github.com/demoonk/TVHome/releases/latest) APK и подходящий скрипт `install.ps1` или `install.sh` (они также лежат в корне репозитория). Замените адрес, порт и пути своими.
 
-Windows, PowerShell из папки Platform-Tools:
+Windows, PowerShell:
+
+```powershell
+.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-1.4.23.apk" -Adb "C:\platform-tools\adb.exe"
+```
+
+macOS / Linux:
+
+```sh
+sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-1.4.23.apk" "./platform-tools/adb"
+```
+
+Если PowerShell блокирует запуск скачанного скрипта, после проверки его содержимого можно выполнить один запуск через `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-1.4.23.apk" -Adb "C:\platform-tools\adb.exe"`. Этот параметр не меняет постоянную политику выполнения системы.
+
+Скрипты требуют явного выбора устройства, проверяют доступ к ADB и API 26+, сохраняют доступный установленный APK в `backups/`, выполняют `install -r` и открывают `ru.pda.tvhome/com.gathin.tvhome.MainActivity` только после `Success`. Ошибка установки останавливает скрипт. Данные не очищаются; штатный Home не отключается, настройки по умолчанию и службы доступности не меняются. Выберите Home через системные настройки самостоятельно. Не используйте старый upstream-скрипт `build-and-install`: для отдельного репозитория TVHome предназначены эти самостоятельные установщики.
+
+Ручная альтернатива из папки Platform-Tools:
 
 ```powershell
 .\adb.exe connect TV_ADDRESS:PORT
-.\adb.exe devices
-.\adb.exe install -r "C:\TV\TVHome-1.4.19.apk"
+.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-1.4.23.apk"
+.\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/com.gathin.tvhome.MainActivity
 ```
 
-macOS / Linux, терминал из папки Platform-Tools:
-
-```sh
-./adb connect TV_ADDRESS:PORT
-./adb devices
-./adb install -r "$HOME/Downloads/TVHome-1.4.19.apk"
-```
-
-Перед установкой в `devices` должно отображаться `device`, а не `unauthorized`. Если подключено несколько устройств, добавьте `-s TV_ADDRESS:PORT` перед `install`. Дождитесь `Success`, затем выберите Home через системные настройки, как описано выше. Ключ `-r` обновляет совместимое приложение с сохранением данных. После установки отключите ADB / беспроводную отладку в настройках ТВ и отзовите разрешения отладки.
+Для macOS/Linux замените `.\adb.exe` на `./adb`. При ошибке `install` не продолжайте запуск. После установки отключите отладку в настройках ТВ и отзовите разрешения отладки. `backups/` содержит APK, а не резервную копию настроек; возврат старой версии по-прежнему зависит от ограничений Android, описанных ниже.
 
 ### Обновления после 1.4.19
 
 Версия 1.4.19 впервые добавляет проверку GitHub Releases: при старте процесса лаунчера и затем примерно раз в сутки при доступной сети. Точное время фоновой проверки определяет Android. При новой версии перед «Входы» появляется кнопка с иконкой обновления и уведомление **«Вышла новая версия …»**. Нажмите кнопку, разрешите установку из TVHome, если Android попросит, затем подтвердите обновление системным установщиком. Скачивание не означает автоматическую установку. При необходимости APK всегда можно установить вручную поверх совместимой версии.
 
-В «Помощи» первой строкой указаны название приложения, установленная версия и ссылка на GitHub. Наличие GitHub Releases и доступ к сети необходимы для проверки обновлений.
+В «Помощи» первой строкой указаны название приложения, установленная версия и ссылка на GitHub. Вторая кнопка «Проверить обновления» выполняет свежую проверку сразу, без суточного ожидания, и сообщает результат. Наличие GitHub Releases и доступ к сети необходимы для проверки обновлений.
 
 ### Совместимость поиска и провайдеров
 
@@ -68,37 +76,47 @@ TVHome requires **Android TV / Google TV running Android 8.0 or newer (API 26)**
 3. Launch TVHome. In the TV's system **Settings → Apps → Default apps → Home app**, choose TVHome. Some TVs show the chooser when you press Home. Menu names vary by firmware. If Home selection is unavailable, keep the current default and launch TVHome as an app; do not disable stock packages to force a replacement.
 4. Test Home, directional navigation, launching apps and access to system Settings. Keep system Settings accessible so you can restore the stock Home.
 
-On TVs running **1.4.18 or earlier, install the first 1.4.19 APK manually over the existing app**. A compatible in-place update with the same application ID and signing key preserves app data and settings. An APK signed with a different key cannot update the installed app. If installation fails, retain the error and obtain a build signed with the original key; do not uninstall the app or clear its data.
+On TVs running **1.4.18 or earlier, install the latest release (1.4.19 or newer) manually over the existing app**; intermediate versions are not required. A compatible in-place update with the same application ID and signing key preserves app data and settings. An APK signed with a different key cannot update the installed app. If installation fails, retain the error and obtain a build signed with the original key; do not uninstall the app or clear its data.
 
-### Optional installation using a computer and ADB
+### Computer installation: verified scripts and ADB
 
-Download the official [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools) for Windows, macOS or Linux and extract the complete archive. Java and Android Studio are not required for installing a prebuilt APK. Enable developer options on the TV (usually by selecting its build number seven times), then enable the ADB debugging option provided by its firmware. Use your trusted local network and approve the debugging prompt on the TV.
+Download the official [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools) and extract the complete archive. Java and Android Studio are not required to install an APK. Enable ADB debugging on the TV and approve your computer. For wireless debugging, run `adb pair TV_ADDRESS:PAIRING_PORT` first, then use the separate **connection port**. For USB, use the serial reported by `adb devices`.
 
-Replace `TV_ADDRESS:PORT` with the address and connection port shown by your TV and replace the APK path with your downloaded file. If wireless debugging requires pairing, first run `adb pair TV_ADDRESS:PAIRING_PORT` and enter the TV's pairing code, then connect to its **connection port**, which may differ from the pairing port. For conventional network ADB, use the port provided by your firmware.
+Download the APK and `install.ps1` or `install.sh` from the [latest release](https://github.com/demoonk/TVHome/releases/latest); the scripts are also in the repository root. Replace the address, port and paths with your own.
 
-Windows PowerShell, from the Platform-Tools directory:
+Windows PowerShell:
+
+```powershell
+.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-1.4.23.apk" -Adb "C:\platform-tools\adb.exe"
+```
+
+macOS / Linux:
+
+```sh
+sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-1.4.23.apk" "./platform-tools/adb"
+```
+
+If PowerShell blocks a downloaded script, review its contents and use a single invocation with `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-1.4.23.apk" -Adb "C:\platform-tools\adb.exe"`. This does not change the persistent system execution policy.
+
+The scripts require an explicit device, check ADB authorization and API 26+, back up any discoverable installed APK to `backups/`, run `install -r`, and launch `ru.pda.tvhome/com.gathin.tvhome.MainActivity` only after installation reports `Success`. Installation errors stop the script. They do not clear app data, disable the stock Home, change default apps or modify accessibility services. Choose the Home app in system Settings yourself. Use these standalone installers for this repository rather than the legacy upstream `build-and-install` script.
+
+Manual alternative from the Platform-Tools directory:
 
 ```powershell
 .\adb.exe connect TV_ADDRESS:PORT
-.\adb.exe devices
-.\adb.exe install -r "C:\TV\TVHome-1.4.19.apk"
+.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-1.4.23.apk"
+.\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/com.gathin.tvhome.MainActivity
 ```
 
-macOS / Linux terminal, from the Platform-Tools directory:
-
-```sh
-./adb connect TV_ADDRESS:PORT
-./adb devices
-./adb install -r "$HOME/Downloads/TVHome-1.4.19.apk"
-```
-
-Before installing, `devices` must show `device`, not `unauthorized`. With multiple devices connected, add `-s TV_ADDRESS:PORT` before `install`. Wait for `Success`, then select TVHome in system Home settings. The `-r` option preserves data when updating a compatible app. Afterwards, turn off ADB / wireless debugging in the TV's settings and revoke debugging authorizations.
+On macOS/Linux use `./adb` instead of `.\adb.exe`. Do not continue to launch after a failed installation. Afterwards, turn off debugging and revoke debugging authorizations in the TV's Settings. `backups/` contains APKs, not app-setting backups; downgrades remain subject to the Android restrictions below.
 
 ### Updates from 1.4.19 onward
 
 Version 1.4.19 introduces GitHub release checks when the launcher process starts and approximately once daily when a network is available; Android controls the actual background timing. When an update is available, an update-icon button appears before **Inputs**, together with a **“Вышла новая версия …”** (“A new version is available …”) notification. Select it, allow installations from TVHome if prompted, and confirm the update in Android's installer. Downloading never silently installs an update. Manual in-place installation remains available for compatible APKs.
 
 The first row of **Help** shows the app name, installed version and GitHub link. Update checks require accessible GitHub Releases and a network connection.
+
+The second Help button, “Проверить обновления” (Check for updates), performs a fresh check immediately without waiting for the daily schedule.
 
 ### Search and provider compatibility
 
@@ -133,7 +151,7 @@ cd launcher
 Пример схемы (SHA-256 нужно заменить фактическим):
 
 ```json
-{"versionCode":68,"versionName":"1.4.19","apkName":"TVHome-1.4.19.apk","sha256":"<64 hexadecimal characters>"}
+{"versionCode":72,"versionName":"1.4.23","apkName":"TVHome-1.4.23.apk","sha256":"<64 hexadecimal characters>"}
 ```
 
 Приложение читает Releases API без авторизации; токенов GitHub внутри APK нет. Проверяются SHA-256, packageName, повышение versionCode и совпадение сертификатов подписи перед передачей APK системному установщику.
@@ -144,7 +162,7 @@ cd launcher
 
 Since 1.4.21, say “Алиса, <message>” to open Alice in Yandex Browser and automatically submit the message. “Алиса” alone opens the page without sending a message. The message is not interpreted as a local TV command. Yandex Browser for TV is preferred; the Android Yandex Browser package is also supported.
 
-Анимация запуска плитки ускорена до 167 мс; обратный переход остаётся 500 мс. The outgoing tile animation is now 167 ms; the return animation remains 500 ms.
+С версии 1.4.23 анимация при нажатии плитки отключена: приложение открывается сразу. Обратный переход при возврате сохранён. Пружинная обводка навигации сохранена и учитывает масштаб активных кнопок. Since 1.4.23, apps open immediately without a tile launch animation. The return transition is preserved. The spring navigation outline remains and follows the actual scaled button bounds.
 
 ## Возможности форка
 
@@ -152,4 +170,6 @@ Since 1.4.21, say “Алиса, <message>” to open Alice in Yandex Browser an
 
 ## Проверка
 
-Для 1.4.19 выполняются `testReleaseUnitTest`, `lintRelease`, `assembleRelease`. Код проверки обновлений покрыт JVM-тестами правил URL, имени APK и SHA-256. Проверка визуального интерфейса и установки обновления на реальном ТВ обязательна отдельно.
+Для 1.4.23 выполняются `testReleaseUnitTest`, `lintRelease`, `assembleRelease`. Код проверки обновлений покрыт JVM-тестами правил URL, имени APK и SHA-256. Проверка визуального интерфейса и установки обновления на реальном ТВ обязательна отдельно.
+
+Проверка установщиков / Installer checks: `python -m unittest discover -s tests -v` (PowerShell и Bash запускаются с подставным ADB; телевизор не меняется / fake ADB, no TV changes).

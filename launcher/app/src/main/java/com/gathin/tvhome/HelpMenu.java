@@ -50,6 +50,18 @@ final class HelpMenu {
                 android.widget.Toast.makeText(activity, "Браузер не найден", android.widget.Toast.LENGTH_SHORT).show();
             }
         });
+        key("Проверить обновления", "Проверить новую версию сейчас");
+        android.view.View checkUpdates = list.getChildAt(list.getChildCount() - 1);
+        checkUpdates.setOnClickListener(v -> {
+            if (!checkUpdates.isEnabled()) return;
+            checkUpdates.setEnabled(false);
+            android.widget.Toast.makeText(activity, "Проверка обновлений…", android.widget.Toast.LENGTH_SHORT).show();
+            AppUpdates.checkManually(activity, result -> {
+                checkUpdates.setEnabled(true);
+                if (!activity.isDestroyed() && !activity.isFinishing())
+                    android.widget.Toast.makeText(activity, result, android.widget.Toast.LENGTH_LONG).show();
+            });
+        });
         paragraph("Короткий путеводитель по пульту. Кнопки работают, когда лаунчер открыт; «мои кнопки» настраиваются отдельно — последний раздел.");
 
         section("Навигация");

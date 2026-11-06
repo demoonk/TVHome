@@ -14,6 +14,16 @@ final class HeaderFocusOverlay extends View {
     private final SpringAnimation[] springs = new SpringAnimation[5];
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private boolean placed;
+    private View anchor;
+    private FrameLayout anchorRoot;
+    private boolean anchorAnimated,anchorTileShape,forcePlacement;
+    private final Matrix targetMatrix=new Matrix();
+    private final RectF targetRect=new RectF();
+    private final float[] goal=new float[5],lastGoal=new float[5];
+    private final android.view.ViewTreeObserver.OnPreDrawListener tracker=()->{
+        if(getVisibility()==VISIBLE&&anchor!=null&&anchor.isAttachedToWindow())alignAnchor();
+        return true;
+    };
     HeaderFocusOverlay(Context context) {
         super(context);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -30,21 +40,37 @@ final class HeaderFocusOverlay extends View {
     }
     void pointAt(View target, FrameLayout root, boolean animate) { pointAt(target, root, animate, false); }
     void pointAt(View target, FrameLayout root, boolean animate, boolean tileShape) {
-        int[] origin = new int[2], at = new int[2];
-        root.getLocationOnScreen(origin); target.getLocationOnScreen(at);
-        float density = getResources().getDisplayMetrics().density;
-        float pad = 3 * density;
-        float radius = tileShape
-                ? AppAdapter.cornerRadius(target.getWidth(), density) + pad
-                : target.getHeight() / 2f + pad;
-        float[] goal = {at[0]-origin[0]-pad, at[1]-origin[1]-pad,
-                target.getWidth()+pad*2, target.getHeight()+pad*2, radius};
-        for (int i=0; i<springs.length; i++) {
-            if (!placed || !animate) { springs[i].cancel(); bounds[i]=goal[i]; springs[i].setStartValue(goal[i]); }
-            else springs[i].animateToFinalPosition(goal[i]);
-        }
-        placed=true; setVisibility(VISIBLE); invalidate();
+        anchor=target;anchorRoot=root;anchorAnimated=animate;anchorTileShape=tileShape;forcePlacement=true;
+        setVisibility(VISIBLE);alignAnchor();
     }
+    private void alignAnchor(){
+        if(anchor.getWidth()<1||anchor.getHeight()<1)return;
+        targetMatrix.reset();
+        View current=anchor;
+        while(current!=anchorRoot){
+            if(!(current.getParent() instanceof View))return;
+            View parent=(View)current.getParent();
+            targetMatrix.postConcat(current.getMatrix());
+            targetMatrix.postTranslate(current.getLeft()-parent.getScrollX(),current.getTop()-parent.getScrollY());
+            current=parent;
+        }
+        targetRect.set(0,0,anchor.getWidth(),anchor.getHeight());targetMatrix.mapRect(targetRect);
+        float density=getResources().getDisplayMetrics().density,pad=3*density;
+        float scale=Math.min(targetRect.width()/anchor.getWidth(),targetRect.height()/anchor.getHeight());
+        goal[0]=targetRect.left-pad;goal[1]=targetRect.top-pad;
+        goal[2]=targetRect.width()+pad*2;goal[3]=targetRect.height()+pad*2;
+        goal[4]=anchorTileShape?AppAdapter.cornerRadius(anchor.getWidth(),density)*scale+pad:targetRect.height()/2+pad;
+        boolean changed=!placed;
+        for(int i=0;i<springs.length;i++){
+            if(!placed||forcePlacement||Math.abs(lastGoal[i]-goal[i])>.05f){
+                if(!placed||!anchorAnimated){springs[i].cancel();bounds[i]=goal[i];springs[i].setStartValue(goal[i]);}
+                else springs[i].animateToFinalPosition(goal[i]);
+                changed=true;lastGoal[i]=goal[i];
+            }
+        }
+        placed=true;forcePlacement=false;if(changed)invalidate();
+    }
+    @Override protected void onAttachedToWindow(){super.onAttachedToWindow();getViewTreeObserver().addOnPreDrawListener(tracker);}
     @Override protected void onDraw(Canvas canvas) {
         if (!placed) return;
         RectF r = new RectF(bounds[0], bounds[1], bounds[0]+Math.max(1,bounds[2]), bounds[1]+Math.max(1,bounds[3]));
@@ -55,5 +81,5 @@ final class HeaderFocusOverlay extends View {
         paint.setColor(0x66FFFFFF);
         canvas.drawRoundRect(r,bounds[4],bounds[4],paint);
     }
-    @Override protected void onDetachedFromWindow() { for (SpringAnimation spring:springs) spring.cancel(); super.onDetachedFromWindow(); }
+    @Override protected void onDetachedFromWindow() { if(getViewTreeObserver().isAlive())getViewTreeObserver().removeOnPreDrawListener(tracker);for(SpringAnimation spring:springs)spring.cancel();anchor=null;anchorRoot=null;super.onDetachedFromWindow(); }
 }

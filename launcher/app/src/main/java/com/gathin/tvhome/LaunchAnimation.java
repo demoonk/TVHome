@@ -10,14 +10,14 @@ import android.widget.ImageView;
 import android.widget.Toast;
 import java.util.WeakHashMap;
 
-/** Animate a snapshot without changing the real tile's focus geometry. */
+/** Launch immediately; keep only the existing return-to-tile transition. */
 final class LaunchAnimation {
     private static final WeakHashMap<Activity, State> states = new WeakHashMap<>();
     private static final class State {
         Bitmap bitmap;
         View tile;
         float alpha;
-        boolean away, completing;
+        boolean away;
         ImageView image;
     }
 
@@ -44,22 +44,8 @@ final class LaunchAnimation {
             return;
         }
         states.put(activity, state);
-        ImageView image = attach(activity, state);
-        state.image = image;
-        tile.setAlpha(0);
-        View root = (View) image.getParent();
-        image.animate().x(0).y(0)
-                .scaleX((float) root.getWidth() / tile.getWidth())
-                .scaleY((float) root.getHeight() / tile.getHeight()).alpha(0).setDuration(167)
-                .setInterpolator(new android.view.animation.AccelerateInterpolator())
-                .withEndAction(() -> {
-                    if (states.get(activity) != state || state.completing) return;
-                    state.completing=true;
-                    detach(state);
-                    state.away = true;
-                    if (activity.isDestroyed() || activity.isFinishing()
-                            || !launch(activity, intent, opened)) clear(activity, state);
-                }).start();
+        state.away=true;
+        if(!launch(activity,intent,opened))clear(activity,state);
     }
 
     private static boolean launch(Activity activity, Intent intent, Runnable opened) {
@@ -111,6 +97,7 @@ final class LaunchAnimation {
                 clear(activity, state);
                 return;
             }
+            state.tile.setAlpha(0f);
             ImageView image = attach(activity, state);
             state.image = image;
             float x = image.getX(), y = image.getY();

@@ -8,3 +8,6 @@
 *.bak
 .idea/
 .gradle/
+backups/
+__pycache__/
+tests/installer-test-*/

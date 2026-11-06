@@ -57,15 +57,35 @@ final class AppUpdates {
         });
         return cancellation;
     }
+    /** Explicit user request: queue a fresh check even if a scheduled check is already running.
+     * It bypasses both STARTED and the daily cache; the shared worker serializes network operations. */
+    static void checkManually(Context context, java.util.function.Consumer<String> completed) {
+        Context c = context.getApplicationContext();
+        if (repository(c).isEmpty()) { MAIN.post(() -> completed.accept("GitHub ещё не настроен")); return; }
+        WORK.execute(() -> {
+            String message;
+            prefs(c).edit().putLong("last_attempt", System.currentTimeMillis()).apply();
+            try {
+                if (!fetch(c, new CancellationSignal())) throw new IOException("No stable release");
+                String version = availableVersion(c);
+                message = version.isEmpty() ? "Установлена последняя версия" : "Вышла новая версия " + version;
+            } catch (Exception failure) {
+                message = "Не удалось проверить обновления. Проверьте сеть и повторите попытку";
+            }
+            final String result = message;
+            MAIN.post(() -> completed.accept(result));
+        });
+    }
+
     private static JSONObject json(String url,CancellationSignal cancellation) throws Exception {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         transfer(url, bytes, 1024 * 1024,cancellation);
         return new JSONObject(bytes.toString("UTF-8"));
     }
-    private static void fetch(Context c,CancellationSignal cancellation) throws Exception {
+    private static boolean fetch(Context c,CancellationSignal cancellation) throws Exception {
         String repo = repository(c), slug = repo.substring("https://github.com/".length());
         JSONObject release = json("https://api.github.com/repos/"+slug+"/releases/latest",cancellation);
-        if(release.optBoolean("draft") || release.optBoolean("prerelease")) return;
+        if(release.optBoolean("draft") || release.optBoolean("prerelease")) return false;
         JSONArray assets = release.getJSONArray("assets");
         Map<String,String> links = new HashMap<>();
         for(int i=0;i<assets.length();i++) {
@@ -88,6 +108,7 @@ final class AppUpdates {
                     .putString("apk_sha256",hash.toLowerCase(Locale.ROOT));
         } else edit.remove("version_name").remove("version_code").remove("apk_url").remove("release_url").remove("apk_sha256");
         edit.apply();
+        return true;
     }
     static void schedule(Context c) {
         JobScheduler jobs=c.getSystemService(JobScheduler.class);
