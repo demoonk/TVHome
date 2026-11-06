@@ -16,6 +16,11 @@ final class WallpaperBrowseMode {
     }
     boolean active() { return active; }
     boolean explicit() { return explicit; }
+    boolean acceptsStep(boolean navigationKey, boolean programKey) {
+        return active && (explicit ? navigationKey : programKey);
+    }
+    static void reserveArrowRelease() { arrowsReserved = true; }
+    static void releaseArrowRelease() { arrowsReserved = false; }
     long exitDuration(boolean leavingMode) { return leavingMode && explicit ? 1000L : 500L; }
     void reset() { active = explicit = false; arrowsReserved = false; }
 }

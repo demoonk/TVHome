@@ -1608,7 +1608,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
         // Own both DOWN and UP before any mode-exit or normal focus handling.
-        if (wallpaperBrowse.active() && RemoteKeys.wallpaperArrow(event)) {
+        if (wallpaperBrowse.explicit() && RemoteKeys.wallpaperArrow(event)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN && !event.isCanceled() && wallpaperPlayer != null) {
                 if (wallpaperStep(event.getKeyCode()) > 0) wallpaperPlayer.next();
                 else wallpaperPlayer.previous();
@@ -1617,14 +1617,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
 
         if (event.getKeyCode() == wallpaperExitKey) {
-            if (event.getAction() == KeyEvent.ACTION_UP) wallpaperExitKey = -1;
+            if (event.getAction() == KeyEvent.ACTION_UP) { wallpaperExitKey = -1; WallpaperBrowseMode.releaseArrowRelease(); }
             return true;
         }
         if (wallpaperBrowse.active() && event.getAction() == KeyEvent.ACTION_DOWN
-                && wallpaperStep(event.getKeyCode()) == 0) {
+                && !wallpaperBrowse.acceptsStep(wallpaperStep(event.getKeyCode()) != 0, programStep(event.getKeyCode()) != 0)) {
             boolean back = event.getKeyCode() == KeyEvent.KEYCODE_BACK
                     || event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE;
+            boolean arrow=RemoteKeys.wallpaperArrow(event);
             exitWallpaperBrowsing(back && wallpaperBrowse.explicit());
+            if(arrow){
+                wallpaperExitKey=event.getKeyCode();
+                WallpaperBrowseMode.reserveArrowRelease();
+                return true;
+            }
             if (back) { wallpaperExitKey = event.getKeyCode(); return true; }
         }
         if (dimmed) {
@@ -1635,7 +1641,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         // The remote's Program +/− (channel/page) switch wallpapers on Home too, not only in the preview
         // — including the videos an Aerial Views plugin serves, so "next video" needs no trip through settings.
-        int programStep = wallpaperBrowse.active()
+        int programStep = wallpaperBrowse.explicit()
                 ? wallpaperStep(event.getKeyCode()) : programStep(event.getKeyCode());
         if (programStep != 0 && !reordering && openPopup == null && cardPrompt == null && steppableWallpaper()) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
