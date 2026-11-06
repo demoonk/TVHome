@@ -266,6 +266,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private static String lastFocusedKey;
     /** True while the single moving contour is over a top-bar button (so it can travel back to a tile). */
     private boolean headerFocusing;
+    private static int rememberedHeaderFocus = View.NO_ID;
+    private int focusRestoreGeneration;
     private float density;
     /** Module cards (res/values/config.xml, module_cards): discovered on resume, shown only after the owner's Show. */
     private boolean moduleCards;
@@ -489,7 +491,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // at screen scale, and the old tiny bitmap was smoothed away by the upscale. A touch of
         // bilinear softening at 1.4x is invisible; a full glowSide bitmap would cost ~29 MB always.
         int glowPx = Math.min(glowSide, getResources().getDisplayMetrics().widthPixels);
-        glowCore.setImageBitmap(GradientDither.spotlight(glowPx));
+        HomeArtwork.spotlight(glowPx, bitmap -> { if (!isDestroyed()) glowCore.setImageBitmap(bitmap); });
         glowCore.setAlpha(0f);
         glowCore.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         root.addView(glowCore, 1, new FrameLayout.LayoutParams(glowSide, glowSide));
@@ -798,10 +800,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }else open(new Intent(Intent.ACTION_VOICE_COMMAND));
         });
         btnHomeSettings.setVisibility(View.GONE);
-        btnSettings.setOnClickListener(v->openLauncherSection(""));
+        btnSettings.setOnClickListener(v->{rememberedHeaderFocus=v.getId();openLauncherSection("");});
         btnSettings.setOnLongClickListener(v->{open(systemIntent(Settings.ACTION_SETTINGS));return true;});
-        btnVoice.setOnLongClickListener(v->{openLauncherSection("voice");return true;});
-        btnSleep.setOnClickListener(v->openLauncherSection("sleep"));
+        btnVoice.setOnLongClickListener(v->{rememberedHeaderFocus=v.getId();openLauncherSection("voice");return true;});
+        btnSleep.setOnClickListener(v->{rememberedHeaderFocus=v.getId();openLauncherSection("sleep");});
         updateSleepButton();
         if (topMenu) {
             // The lone-gear mode is pills only: the round buttons do not crowd its single gear.
@@ -817,32 +819,27 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         FrameLayout headerRoot = findViewById(R.id.root);
         headerFocus = new HeaderFocusOverlay(this);
-        headerFocus.setVisibility(View.INVISIBLE);
+        headerFocus.clear();
         headerRoot.addView(headerFocus, new FrameLayout.LayoutParams(-1, -1));
         headerRoot.getViewTreeObserver().addOnGlobalFocusChangeListener((oldView, newView) -> {
             if (!updateForeground || !tilesReady) return;
             boolean header = inViewGroup(newView, R.id.topButtons);
             boolean gridTile = inViewGroup(newView, R.id.grid);
-            boolean animate = animations && !reducedMotion;
+            boolean animate = animations && !reducedMotion && !settlingFocus;
             if (header && newView != null) {
+                rememberedHeaderFocus = newView.getId();
 
                 if (glowCore != null) glowCore.animate().alpha(0f).setDuration(180).start();
-                // Variant 2: one contour. Coming up from a tile it starts where the tile glass was, so the
-                // outline visibly travels between the tiles and the top bar instead of a second one appearing.
-                if (!headerFocusing && glassShown) headerFocus.pointAt(glass, headerRoot, false, true);
+                // Header controls always start with their own pill geometry, never a tile-sized outline.
+                if (!headerFocusing) headerFocus.clear();
                 headerFocus.pointAt(newView, headerRoot, animate, false);
                 headerFocusing = true;
             } else if (gridTile && newView != null) {
-                if (headerFocusing) {
-                    // Travel down from the button; the contour is already tile-shaped when it lands.
-                    headerFocus.pointAt(newView, headerRoot, animate, true);
-                    headerRoot.postDelayed(() -> headerFocus.setVisibility(View.INVISIBLE), animate ? 320 : 0);
-                } else {
-                    headerFocus.setVisibility(View.INVISIBLE);
-                }
+                rememberedHeaderFocus = View.NO_ID;
+                headerFocus.clear();
                 headerFocusing = false;
             } else {
-                headerFocus.setVisibility(View.INVISIBLE);
+                headerFocus.clear();
                 headerFocusing = false;
             }
         });
@@ -1185,8 +1182,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     @Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
-        if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN)
+        if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+            if (tilesReady) focusRestoreGeneration++;
             exitWallpaperBrowsing(false);
+        }
         return super.dispatchTouchEvent(event);
     }
 
@@ -1350,16 +1349,29 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         packageSequence = currentPackageSequence(packageSequence);
     }
 
-    /** Restore the remembered app, or the first tile if it disappeared. */
+    /** Restore the control we left from; tile identity is retained separately from header focus. */
     private void restoreFocus() {
-        final String returnKey = lastFocusedKey;
+        final int request = ++focusRestoreGeneration;
         grid.post(() -> {
-            if (isFinishing() || isDestroyed()) return;
+            if (request != focusRestoreGeneration || isFinishing() || isDestroyed() || !updateForeground || !hasWindowFocus()) return;
+            final String returnKey = lastFocusedKey;
+            final int returnHeader = rememberedHeaderFocus;
             settlingFocus = true;
-
-
             tilesReady = true;
-            focusTile(HomeFocus.position(returnKey, adapter::positionOf));
+            View header = returnHeader == View.NO_ID ? null : findViewById(returnHeader);
+            if (header != null && header.isShown() && header.isEnabled()) {
+                cancelPendingFocusScroll();
+                header.setFocusableInTouchMode(true);
+                header.requestFocus();
+                rememberedHeaderFocus = returnHeader;
+                glass.animate().cancel(); glass.setAlpha(0f); glassShown = false;
+                glowCore.animate().cancel(); glowCore.setAlpha(0f);
+                headerFocus.pointAt(header, root, false, false);
+                headerFocusing = true;
+            } else {
+                rememberedHeaderFocus = View.NO_ID;
+                focusTile(HomeFocus.position(returnKey, adapter::positionOf));
+            }
             startPendingSettingsReorder();
             showCardPrompt();
         });
@@ -1417,13 +1429,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Clear the actual view even when the boolean has already been reset.
         if(dimScrim!=null){dimScrim.animate().cancel();dimScrim.setAlpha(0f);dimScrim.setVisibility(View.GONE);}
         if(headerFocus!=null){headerFocus.animate().cancel();headerFocus.setAlpha(1f);}
-        if(glass!=null){glass.animate().cancel();glass.setAlpha(1f);}
+        if(glass!=null){glass.animate().cancel();glass.setAlpha(rememberedHeaderFocus == View.NO_ID ? 1f : 0f);}
         if(rearm){armDim();if(wasDimmed&&dimOled&&wallpaperPlayer!=null)wallpaperPlayer.start();}
     }
 
     @Override
     protected void onPause() {
         updateForeground = false;
+        focusRestoreGeneration++;
+        headerFocus.clear();
+        headerFocusing = false;
 
         getSharedPreferences("home_focus", MODE_PRIVATE).edit()
                 .putString("key", lastFocusedKey).putInt("slot", lastFocused).apply();
@@ -1472,6 +1487,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         boolean due = level >= TRIM_MEMORY_BACKGROUND
                 || level == TRIM_MEMORY_RUNNING_LOW || level == TRIM_MEMORY_RUNNING_CRITICAL;
         if (!due || started) return;
+        wallpaperPlayer.trim();
+        HomeArtwork.trim();
         adapter.clear();
         // Detach the adapter too: with Home stopped no layout pass runs, so the tile views (and the bitmaps
         // they hold) would stay attached until Home comes back. setAdapter(null) recycles them now.
@@ -1486,7 +1503,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
-            if (settlingFocus && tilesReady && appLibrary == null) restoreFocus();
+            if (settlingFocus && appLibrary == null) restoreFocus();
             startPendingSettingsReorder();
             if (libraryFocusPending && appLibrary == null) focusLibrary();
             showCardPrompt();
@@ -1543,6 +1560,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN && tilesReady) focusRestoreGeneration++;
         int key = event.getKeyCode();
         if (event.getAction() == KeyEvent.ACTION_DOWN && !wallpaperBrowse.active()
                 && (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT
@@ -2014,7 +2032,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public void onTileFocused(int position, View card) {
         if (!tilesReady || !updateForeground) return;
-        if (settlingFocus && position != HomeFocus.position(lastFocusedKey, adapter::positionOf)) return;
+        if (settlingFocus && (rememberedHeaderFocus != View.NO_ID || position != HomeFocus.position(lastFocusedKey, adapter::positionOf))) return;
+        rememberedHeaderFocus = View.NO_ID;
         placeGlowCore(position, adapter.ambientColorAt(position));
 
         lastFocused = position;
@@ -3335,6 +3354,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
     private void addFocusGlow(View button) {
+        button.setFocusableInTouchMode(true);
         GlowPillDrawable.apply(button, density, headerPlateOpacity, headerPlateBlur);
         if (button instanceof TextView) {
             TextView text = (TextView) button;

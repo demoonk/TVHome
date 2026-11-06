@@ -14,6 +14,7 @@ final class HeaderFocusOverlay extends View {
     private final SpringAnimation[] springs = new SpringAnimation[5];
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private boolean placed;
+    private final boolean[] resetSpring = new boolean[5];
     private View anchor;
     private FrameLayout anchorRoot;
     private boolean anchorAnimated,anchorTileShape,forcePlacement;
@@ -28,15 +29,19 @@ final class HeaderFocusOverlay extends View {
         super(context);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         setFocusable(false);
-        for (int i = 0; i < springs.length; i++) {
-            final int axis = i;
-            // The corner radius settles much faster than the position, so the contour is already the
-            // tile's shape when it lands on a tile; the position spring keeps its rubber-band overshoot.
-            springs[i] = new SpringAnimation(new FloatValueHolder()).setSpring(
-                    new SpringForce().setStiffness(axis == 4 ? 900f : 260f)
-                            .setDampingRatio(axis == 4 ? 1f : .58f));
-            springs[i].addUpdateListener((animation, value, velocity) -> { bounds[axis] = value; invalidate(); });
-        }
+        for (int i = 0; i < springs.length; i++) springs[i] = makeSpring(i);
+    }
+    private SpringAnimation makeSpring(int axis) {
+        SpringAnimation spring = new SpringAnimation(new FloatValueHolder()).setSpring(
+                new SpringForce().setStiffness(axis == 4 ? 900f : 260f)
+                        .setDampingRatio(axis == 4 ? 1f : .58f));
+        spring.addUpdateListener((animation, value, velocity) -> { bounds[axis] = value; invalidate(); });
+        return spring;
+    }
+    void clear() {
+        for (int i = 0; i < springs.length; i++) { springs[i].cancel(); resetSpring[i] = true; }
+        anchor = null; anchorRoot = null; placed = false;
+        setVisibility(INVISIBLE);
     }
     void pointAt(View target, FrameLayout root, boolean animate) { pointAt(target, root, animate, false); }
     void pointAt(View target, FrameLayout root, boolean animate, boolean tileShape) {
@@ -63,8 +68,11 @@ final class HeaderFocusOverlay extends View {
         boolean changed=!placed;
         for(int i=0;i<springs.length;i++){
             if(!placed||forcePlacement||Math.abs(lastGoal[i]-goal[i])>.05f){
-                if(!placed||!anchorAnimated){springs[i].cancel();bounds[i]=goal[i];springs[i].setStartValue(goal[i]);}
-                else springs[i].animateToFinalPosition(goal[i]);
+                if(!placed||!anchorAnimated){springs[i].cancel();bounds[i]=goal[i];resetSpring[i]=true;}
+                else {
+                    if(resetSpring[i]) { springs[i]=makeSpring(i);springs[i].setStartValue(bounds[i]).setStartVelocity(0f);resetSpring[i]=false; }
+                    springs[i].animateToFinalPosition(goal[i]);
+                }
                 changed=true;lastGoal[i]=goal[i];
             }
         }

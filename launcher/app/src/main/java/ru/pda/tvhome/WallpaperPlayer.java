@@ -20,6 +20,7 @@ final class WallpaperPlayer {
  private final Handler handler=new Handler(Looper.getMainLooper());
  private final ExecutorService worker=Executors.newSingleThreadExecutor();
  private final Runnable tick=this::update;
+ private ImageView previewView;private boolean previewRequested;
  private Layer current,outgoing,pending; private boolean active,closed,loading,blocked;private int generation,index=-1;private long shownAt;
  /** How many plugin videos in a row failed to prepare. Past this many the player falls silent rather
   *  than burning another timeout per clip forever (a network that black-holes the CDN, say). */
@@ -29,12 +30,36 @@ final class WallpaperPlayer {
  private static final long PREPARE_TIMEOUT_MS=25000;
  WallpaperPlayer(Context c,FrameLayout root,Config ignored){
   context=c;this.root=root;background=new FrameLayout(c);background.setTag("header_wallpaper_source");background.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);root.addView(background,0,new FrameLayout.LayoutParams(-1,-1));
+  restorePreview();
   if(c instanceof Activity)((Activity)c).getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);
  }
  void start(){start(false);}
- void start(boolean advanceFirst){if(closed)return;active=true;blocked=false;if(current==null)load(advanceFirst);else if(advanceFirst){current.view.animate().cancel();current.view.setAlpha(1f);load(true);}else{current.view.animate().cancel();current.view.setAlpha(0f);current.view.animate().alpha(1f).setDuration(WallpaperSource.TRANSITION_MS).setInterpolator(new android.view.animation.LinearInterpolator()).start();schedule();resumeVideo();}}
- void stop(){active=false;handler.removeCallbacks(tick);generation++;loading=false;if(pending!=null){pending.release();pending=null;}if(current!=null)current.pauseVideo();if(current!=null){current.release();current=null;}if(outgoing!=null){outgoing.release();outgoing=null;}}
- void close(){stop();closed=true;worker.shutdownNow();if(current!=null)current.release();if(outgoing!=null)outgoing.release();root.removeView(background);}
+ void start(boolean advanceFirst){
+  if(closed)return;active=true;blocked=false;
+  if(current==null){restorePreview();load(advanceFirst);}
+  else if(advanceFirst){current.view.animate().cancel();current.view.setAlpha(1f);load(true);}
+  else{current.view.animate().cancel();current.view.setAlpha(1f);current.resumeMotion();schedule();resumeVideo();}
+ }
+ void stop(){
+  active=false;handler.removeCallbacks(tick);generation++;loading=false;
+  if(pending!=null){pending.release();pending=null;}
+  if(current!=null){
+   current.view.animate().cancel();current.view.setAlpha(1f);current.pauseMotion();current.pauseVideo();
+   if(current instanceof VideoLayer){Bitmap frame=((VideoLayer)current).snapshot();if(frame!=null){HomeArtwork.remember(context,frame);displayPreview(frame);}current.release();current=null;}
+  }
+  if(outgoing!=null){outgoing.release();outgoing=null;}
+ }
+ void trim(){stop();if(current!=null){current.release();current=null;}removePreview();previewRequested=false;}
+ void close(){trim();closed=true;worker.shutdownNow();root.removeView(background);}
+ private void restorePreview(){
+  if(previewRequested||WallpaperSource.mode(context).equals("none"))return;previewRequested=true;
+  HomeArtwork.loadPreview(context,bitmap->{if(!closed&&current==null)displayPreview(bitmap);});
+ }
+ private void displayPreview(Bitmap bitmap){
+  if(previewView==null){previewView=new ImageView(context);previewView.setFocusable(false);previewView.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);previewView.setScaleType(ImageView.ScaleType.CENTER_CROP);background.addView(previewView,0,new FrameLayout.LayoutParams(-1,-1));}
+  previewView.setImageBitmap(bitmap);
+ }
+ private void removePreview(){if(previewView!=null){background.removeView(previewView);previewView.setImageDrawable(null);previewView=null;}}
  void update(){if(!active||closed||loading)return;if(current==null){load(false);return;}if(!WallpaperSource.mode(context).equals("file")&&SystemClock.elapsedRealtime()-shownAt>=WallpaperSource.minutes(context)*60000L)load(true);}
  /** The wallpaper settings' "Режим смены обоев": show the next picture of the collection now. */
  void next(){if(closed||loading)return;load(1);}
@@ -52,8 +77,8 @@ final class WallpaperPlayer {
    int next=step>0?(index+1+n)%n:step<0?(index<0?n-1:(index-1+n)%n):Math.max(0,Math.min(index,n-1));
    WallpaperSource.Item item=items.get(next);
    if(item.video){handler.post(()->{if(request!=generation||closed||!active)return;Layer layer=new VideoLayer(item);pending=layer;layer.ready(()->{if(request!=generation||!active||closed){layer.release();return;}pending=null;loading=false;videoSkips=0;show(layer);index=next;shownAt=SystemClock.elapsedRealtime();schedule();},()->{layer.release();if(request!=generation||closed)return;pending=null;loading=false;if(!closed){Log.i(ProjectivyClient.TAG,"video wallpaper skipped: "+item.uri);if(videoSkips<3){videoSkips++;index=next;load(1);}else failed(request,"Не удалось воспроизвести видеообои. Выберите другой источник");}});});return;}
- Bitmap bitmap=decode(item);
-   handler.post(()->{if(request!=generation||closed||!active){if(bitmap!=null)bitmap.recycle();return;}Layer layer=new Layer(item,bitmap);pending=layer;layer.ready(()->{if(request!=generation||!active||closed){layer.release();return;}pending=null;loading=false;show(layer);index=next;shownAt=SystemClock.elapsedRealtime();schedule();},()->{layer.release();pending=null;failed(request,"Не удалось открыть выбранные обои");});});
+ Bitmap bitmap=decode(item);Bitmap preview=null;try{preview=HomeArtwork.previewCopy(bitmap);}catch(OutOfMemoryError unavailable){Log.d("HomeArtwork","Preview skipped");}final Bitmap savedPreview=preview;
+   handler.post(()->{if(request!=generation||closed||!active){if(bitmap!=null)bitmap.recycle();return;}if(savedPreview!=null)HomeArtwork.remember(context,savedPreview);Layer layer=new Layer(item,bitmap);pending=layer;layer.ready(()->{if(request!=generation||!active||closed){layer.release();return;}pending=null;loading=false;show(layer);index=next;shownAt=SystemClock.elapsedRealtime();schedule();},()->{layer.release();pending=null;failed(request,"Не удалось открыть выбранные обои");});});
   }catch(Exception|OutOfMemoryError failure){handler.post(()->failed(request,"Не удалось прочитать обои. Выберите другой файл"));}});
  }
  private void failed(int request,String message){if(request!=generation||closed)return;loading=false;blocked=true;Toast.makeText(context,message,Toast.LENGTH_LONG).show();handler.removeCallbacks(tick);}
@@ -71,8 +96,9 @@ final class WallpaperPlayer {
    TextView attribution=new TextView(context);attribution.setText(incoming.item.name);attribution.setTextSize(10);attribution.setTextColor(0xffdddddd);attribution.setBackgroundColor(0x88000000);attribution.setPadding(12,4,12,4);attribution.setMaxLines(4);attribution.setFocusable(false);
    FrameLayout.LayoutParams caption=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.END);caption.setMargins(24,0,24,12);incoming.view.addView(attribution,caption);
   }
-  incoming.view.setAlpha(0);if(incoming.view.getParent()==null)background.addView(incoming.view,new FrameLayout.LayoutParams(-1,-1));else incoming.view.bringToFront();
-  incoming.view.animate().alpha(1).setDuration(WallpaperSource.TRANSITION_MS).setInterpolator(new android.view.animation.LinearInterpolator()).withEndAction(()->{if(current!=incoming)return;if(outgoing!=null){outgoing.release();outgoing=null;}}).start();
+  boolean cached=previewView!=null;
+  incoming.view.setAlpha(outgoing==null&&!cached?1f:0f);if(incoming.view.getParent()==null)background.addView(incoming.view,new FrameLayout.LayoutParams(-1,-1));else incoming.view.bringToFront();
+  incoming.view.animate().alpha(1).setDuration(outgoing!=null?WallpaperSource.TRANSITION_MS:cached?250:0).setInterpolator(new android.view.animation.LinearInterpolator()).withEndAction(()->{if(current!=incoming)return;if(outgoing!=null){outgoing.release();outgoing=null;}removePreview();}).start();
  }
  private class Layer {
   android.animation.ValueAnimator motion;
@@ -87,6 +113,8 @@ final class WallpaperPlayer {
    done.run();
   }
   void release(){if(released)return;released=true;if(motion!=null){motion.cancel();motion=null;}view.animate().cancel();background.removeView(view);if(bitmap!=null&&!bitmap.isRecycled())bitmap.recycle();}
+  void pauseMotion(){if(motion!=null)motion.pause();}
+  void resumeMotion(){if(motion!=null&&motion.isPaused())motion.resume();}
   void pauseVideo(){}
   void resumeVideo(){}
  }
@@ -128,6 +156,7 @@ final class WallpaperPlayer {
   @Override public void onSurfaceTextureSizeChanged(android.graphics.SurfaceTexture texture,int w,int h){fit();}
   @Override public boolean onSurfaceTextureDestroyed(android.graphics.SurfaceTexture texture){surfaceReady=false;if(player!=null)try{player.setSurface(null);}catch(RuntimeException ignored){}if(attachedSurface!=null){attachedSurface.release();attachedSurface=null;}return true;}
   @Override public void onSurfaceTextureUpdated(android.graphics.SurfaceTexture texture){}
+  Bitmap snapshot(){try{return surface.isAvailable()?surface.getBitmap(1280,720):null;}catch(RuntimeException|OutOfMemoryError unavailable){return null;}}
   @Override void pauseVideo(){if(player!=null)try{if(player.isPlaying())player.pause();}catch(RuntimeException ignored){}}
   @Override void resumeVideo(){play();}
   @Override void release(){
