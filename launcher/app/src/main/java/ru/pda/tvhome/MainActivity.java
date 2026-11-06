@@ -253,6 +253,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private SkyView sky;
     private String vpnApp;
     private SpringAnimation springX, springY;
+    private boolean tileSpringsNeedReset;
     private float glassTargetX, glassTargetY;
     private int glassCardW;   // width of the tile the glass was last fitted to
     private boolean glassShown;
@@ -694,20 +695,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             return true;
         });
 
-        // Liquid feel: soft springs on the highlight's position.
-        springX = new SpringAnimation(glass, DynamicAnimation.TRANSLATION_X);
-        springY = new SpringAnimation(glass, DynamicAnimation.TRANSLATION_Y);
-        for (SpringAnimation s : new SpringAnimation[]{springX, springY}) {
-            if (reducedMotion) {
-                Motion.reduce(s);
-            } else if (!focusOvershoot) {
-                // Critically damped: glides straight onto the tile without swinging past it.
-                s.setSpring(new SpringForce().setStiffness(advancedEffects ? 520f : 440f).setDampingRatio(1f));
-            } else {
-                s.setSpring(new SpringForce().setStiffness(advancedEffects ? 320f : 260f)
-                        .setDampingRatio(advancedEffects ? 0.76f : 0.58f));
-            }
-        }
+        createTileSprings();
 
         btnUpdate = findViewById(R.id.btnUpdate);
         btnUpdate.setOnClickListener(v -> AppUpdates.install(this));
@@ -2040,6 +2028,53 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             });
             return;
         }
+        fitTileGlass(position, card, settlingFocus);
+        float pad = 6f * density;
+        Rect r = tileRect;
+        View item = (View) card.getParent();
+        if (dockRow && position < COLUMNS) {
+            // Dock: park it at the bottom of the screen and show the top shelf for this app.
+            int decoratedTop = item.getTop() - (int) (6 * density);
+            int dy = decoratedTop - grid.getPaddingTop();
+            // A 1px mismatch used to start a scroll on every dock move. Only scroll when the row is
+            // actually off; reduced motion does it in one jump so it does not fight the highlight.
+            boolean scroll = Math.abs(dy) > (int) (8 * density);
+            if (scroll) {
+                if (!animations || reducedMotion) grid.scrollBy(0, dy);
+                else grid.smoothScrollBy(0, dy);
+            }
+            showHero(position, scroll ? r.top - dy : r.top);
+        } else {
+            // Below the dock (or in a plain grid) only the spotlight follows the tile, without the big
+            // name; letting it fade out left the grid on plain black.
+            showGlowOnly();
+            // Scroll just enough so the whole glass (not only the tile) is visible.
+            revealRect.set(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
+            grid.requestChildRectangleOnScreen(item, revealRect, reducedMotion);
+        }
+    }
+
+    /** A cancelled SpringAnimation retains queued targets/velocity; discard it after layout snaps. */
+    private void createTileSprings() {
+        springX = new SpringAnimation(glass, DynamicAnimation.TRANSLATION_X);
+        springY = new SpringAnimation(glass, DynamicAnimation.TRANSLATION_Y);
+        for (SpringAnimation s : new SpringAnimation[]{springX, springY}) {
+            if (reducedMotion) {
+                Motion.reduce(s);
+            } else if (!focusOvershoot) {
+                // Critically damped: glides straight onto the tile without swinging past it.
+                s.setSpring(new SpringForce().setStiffness(advancedEffects ? 520f : 440f).setDampingRatio(1f));
+            } else {
+                s.setSpring(new SpringForce().setStiffness(advancedEffects ? 320f : 260f)
+                        .setDampingRatio(advancedEffects ? 0.76f : 0.58f));
+            }
+        }
+
+        tileSpringsNeedReset = false;
+    }
+
+    /** Geometry only: layout/scroll tracking must never restart RecyclerView navigation. */
+    private void fitTileGlass(int position, View card, boolean snap) {
         // Tile rect in root coordinates, using layout positions (ignores the scale animation).
         Rect r = tileRect;
         r.set(0, 0, card.getWidth(), card.getHeight());
@@ -2073,40 +2108,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (!glassShown) {
             springX.cancel();
             springY.cancel();
+            tileSpringsNeedReset = true;
             glass.setTranslationX(x);
             glass.setTranslationY(y);
-            if (animations && !reducedMotion && !settlingFocus) glass.animate().alpha(1f).setDuration(180).start();
+            if (animations && !reducedMotion && !snap) glass.animate().alpha(1f).setDuration(180).start();
             else glass.setAlpha(1f);
             glassShown = true;
-        } else if (!animations || settlingFocus) {
+        } else if (!animations || snap) {
             springX.cancel();
             springY.cancel();
+            tileSpringsNeedReset = true;
             glass.setTranslationX(x);
             glass.setTranslationY(y);
         } else {
+            if (tileSpringsNeedReset) {
+                createTileSprings();
+                springX.setStartValue(glass.getTranslationX()).setStartVelocity(0f);
+                springY.setStartValue(glass.getTranslationY()).setStartVelocity(0f);
+            }
             springX.animateToFinalPosition(x);
             springY.animateToFinalPosition(y);
-        }
-        View item = (View) card.getParent();
-        if (dockRow && position < COLUMNS) {
-            // Dock: park it at the bottom of the screen and show the top shelf for this app.
-            int decoratedTop = item.getTop() - (int) (6 * density);
-            int dy = decoratedTop - grid.getPaddingTop();
-            // A 1px mismatch used to start a scroll on every dock move. Only scroll when the row is
-            // actually off; reduced motion does it in one jump so it does not fight the highlight.
-            boolean scroll = Math.abs(dy) > (int) (8 * density);
-            if (scroll) {
-                if (!animations || reducedMotion) grid.scrollBy(0, dy);
-                else grid.smoothScrollBy(0, dy);
-            }
-            showHero(position, scroll ? r.top - dy : r.top);
-        } else {
-            // Below the dock (or in a plain grid) only the spotlight follows the tile, without the big
-            // name; letting it fade out left the grid on plain black.
-            showGlowOnly();
-            // Scroll just enough so the whole glass (not only the tile) is visible.
-            revealRect.set(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
-            grid.requestChildRectangleOnScreen(item, revealRect, reducedMotion);
         }
     }
 
@@ -2128,9 +2149,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         float y = actual.exactCenterY() - h / 2f - (advancedEffects ? 4f * density : 0f);
         if (!glassShown || card.getWidth() != glassCardW || glass.getWidth() != w || glass.getHeight() != h
                 || Math.abs(glassTargetX - x) > 1f || Math.abs(glassTargetY - y) > 1f) {
+            fitTileGlass(pos, card, true);
             boolean wasSettling = settlingFocus;
             settlingFocus = true;
-            onTileFocused(pos, card);
+            placeGlowCore(pos, adapter.ambientColorAt(pos));
             settlingFocus = wasSettling;
         }
     }
@@ -2738,6 +2760,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     private void cancelPendingFocusScroll() {
+        pendingTileFocus = RecyclerView.NO_POSITION;
         if (pendingFocusScroll != null) {
             grid.removeOnScrollListener(pendingFocusScroll);
             pendingFocusScroll = null;
@@ -2760,6 +2783,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     private void focusTile(int position) {
+        if (pendingTileFocus != RecyclerView.NO_POSITION && pendingTileFocus == position) {
+            applyPendingTileFocus();
+            return;
+        }
         libraryFocusPending = false;
         cancelPendingFocusScroll();
         if (adapter.appCount() == 0) {
@@ -2784,33 +2811,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             else card.requestFocus();
             return;
         }
-        // Not laid out yet: scroll there, then focus once the scroll settles.
-        if (!animations || settlingFocus) {
+        // Keep the requested tile pending until its holder is attached, even while Down repeats.
+        pendingTileFocus = pos;
+        if (!animations) {
             ((GridLayoutManager) grid.getLayoutManager()).scrollToPositionWithOffset(pos / COLUMNS * COLUMNS, 0);
-            grid.post(() -> {
-                RecyclerView.ViewHolder h = grid.findViewHolderForAdapterPosition(pos);
-                if (h != null) {
-                    View card = h.itemView.findViewById(R.id.card);
-                    if (card.isFocused()) onTileFocused(pos, card);
-                    else card.requestFocus();
-                }
-            });
-            return;
+        } else {
+            grid.smoothScrollToPosition(pos);
         }
-        pendingFocusScroll = new RecyclerView.OnScrollListener() {
-            @Override
-            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
-                if (newState != RecyclerView.SCROLL_STATE_IDLE) return;
-                rv.removeOnScrollListener(this);
-                if (pendingFocusScroll != this) return;
-                pendingFocusScroll = null;
-                RecyclerView.ViewHolder h = rv.findViewHolderForAdapterPosition(pos);
-                View target = h != null ? h.itemView.findViewById(R.id.card) : rv.getChildAt(0);
-                if (target != null) target.requestFocus();
-            }
-        };
-        grid.addOnScrollListener(pendingFocusScroll);
-        grid.smoothScrollToPosition(pos);
+        grid.post(this::applyPendingTileFocus);
     }
 
     // ---- top bar ---------------------------------------------------------------------------------

@@ -11,8 +11,8 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('ru.pda.tvhome')
         minSdk 26
         targetSdk 34
-        versionCode 77
-        versionName '2.0.0'
+        versionCode 79
+        versionName '2.0.1'
     }
 
     signingConfigs {
