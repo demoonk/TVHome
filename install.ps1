@@ -43,6 +43,14 @@ if ($paths.Count -gt 0) {
 $installed = Invoke-Adb -Arguments @('-s', $Device, 'install', '-r', $apkPath)
 Write-Output $installed
 if ($installed -notmatch '(?m)^Success\s*$') { throw 'Installation did not report Success; launch aborted' }
+# Reapply after every installation: Android may reset app-op permissions.
+foreach ($operation in @('SYSTEM_ALERT_WINDOW', 'GET_USAGE_STATS')) {
+    Write-Output (Invoke-Adb -Arguments @('-s', $Device, 'shell', 'appops', 'set', $package, $operation, 'allow'))
+    $permission = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'appops', 'get', $package, $operation)
+    if ($permission -notmatch ($operation + ': allow(?:;|\s|$)')) {
+        throw "APK installed, but $operation was not granted: $permission. Clock setup incomplete."
+    }
+}
 $started = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'am', 'start', '-W', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME', '-n', 'ru.pda.tvhome/ru.pda.tvhome.MainActivity')
 Write-Output $started
 if ($started -match '(?im)^Error:|Exception') { throw 'APK installed but TVHome could not start' }

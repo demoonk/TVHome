@@ -20,7 +20,7 @@
 
 ## Установка и настройка TVHome
 
-**Первоначальную настройку Home и голосового поиска достаточно выполнить один раз.** Дальнейшие совместимые обновления лаунчера устанавливаются поверх существующей версии с сохранением данных и настроек: повторно назначать Home, выдавать разрешения и выбирать голосового помощника не потребуется. Для этого не удаляйте TVHome и не очищайте его данные перед обновлением.
+**Первоначальную настройку Home и голосового поиска достаточно выполнить один раз.** Дальнейшие совместимые обновления лаунчера устанавливаются поверх существующей версии с сохранением данных и настроек: повторно назначать Home и выбирать голосового помощника обычно не потребуется. Если прошивка сбросила разрешения оверлейных часов, восстановите их по инструкции ниже. Для этого не удаляйте TVHome и не очищайте его данные перед обновлением.
 
 ### 1. Что понадобится
 
@@ -184,6 +184,35 @@ ADB-помощник работает до перезагрузки телеви
 
 После завершения настройки можно отключить отладку и отозвать разрешения отладки в настройках ТВ. Для повторного запуска ADB-помощника понадобится снова включить и разрешить подключение.
 
+### Оверлейные часы: разрешения и установка скриптами
+
+Включите «Оверлейные часы» в настройках TVHome. Для показа поверх приложений нужно разрешение `SYSTEM_ALERT_WINDOW`, а для определения активного приложения и скрытия часов на главном экране — `GET_USAGE_STATS`. Разрешите TVHome показ поверх других приложений и доступ к статистике использования в системных настройках ТВ. Если нужных пунктов нет, выполните через ADB:
+
+```powershell
+.\adb.exe -s IP:PORT shell appops set ru.pda.tvhome SYSTEM_ALERT_WINDOW allow
+.\adb.exe -s IP:PORT shell appops set ru.pda.tvhome GET_USAGE_STATS allow
+.\adb.exe -s IP:PORT shell appops get ru.pda.tvhome SYSTEM_ALERT_WINDOW
+.\adb.exe -s IP:PORT shell appops get ru.pda.tvhome GET_USAGE_STATS
+```
+
+Замените `IP:PORT` адресом и портом вашего ТВ. Обе проверки должны показать `allow`. Затем откройте другое приложение: на главном экране TVHome оверлейные часы скрываются. Эти команды подходят и для уже установленного TVHome, переустановка не требуется. Если прошивка сбросила разрешения после переустановки или сброса настроек, выдайте их снова.
+
+Для установки или обновления скачайте APK и `install.ps1` / `install.sh` из [последнего релиза](https://github.com/demoonk/TVHome/releases/latest). Скрипты сохраняют доступный установленный APK в `backups/`, устанавливают обновление с сохранением данных, затем выдают и проверяют оба разрешения. При ошибке установки или проверки запуск останавливается.
+
+Windows, PowerShell:
+
+```powershell
+.\install.ps1 -Device "IP:PORT" -Apk ".\TVHome-2.0.3.apk" -Adb "C:\platform-tools\adb.exe"
+```
+
+macOS / Linux:
+
+```sh
+sh ./install.sh "IP:PORT" "./TVHome-2.0.3.apk" "./platform-tools/adb"
+```
+
+Скрипты не назначают Home, не меняют службы доступности и голосового помощника; первоначальная настройка описана выше. Микрофону отдельно нужен доступ к записи звука.
+
 ## Бонус: обои / Bonus wallpapers
 
 [Скачать ZIP с 67 обоями и посмотреть превью каждой папки / Download 67 wallpapers and browse folder previews](docs/wallpapers/README.md). Обои с дизерингом: плавные градиенты без заметных ступенек бандинга на ТВ. / Dithered wallpapers for smoother TV gradients with less visible banding.
@@ -215,6 +244,12 @@ ADB-помощник работает до перезагрузки телеви
 3. Штатный лаунчер и системные пакеты оставляйте включёнными. Для такого отката не нужны удаление приложений, очистка данных, root, сброс ТВ или скрипты отключения пакетов.
 
 Возврат к прежнему Home и установка старого APK — разные действия. **Android может запретить установку APK с меньшим `versionCode`**, даже при той же подписи (`INSTALL_FAILED_VERSION_DOWNGRADE`). Старый APK можно ставить поверх только если Android допускает такую установку и совпадают package и ключ подписи; совместимость данных с более старой версией также не гарантируется. `adb install -r -d` не гарантирует downgrade обычной release-сборки. При отказе не удаляйте TVHome и не очищайте данные: оставайтесь на штатном Home и дождитесь исправленного совместимого обновления.
+
+## Floating clock permissions — English
+
+Enable the overlay clock in TVHome settings. Grant display-over-other-apps (`SYSTEM_ALERT_WINDOW`) and usage access (`GET_USAGE_STATS`) in system settings or use the ADB commands above. Both `appops get` checks must report `allow`. Usage access identifies the foreground app so the clock hides on TVHome's Home screen. Open another app to check the clock. Firmware may reset permissions after reinstallation or a permission reset; the same commands restore them without reinstalling.
+
+The release installers `install.ps1` and `install.sh` now grant and verify both permissions after every successful APK installation, preserving app data. They stop on installation or permission errors. Home, accessibility, microphone and voice-assistant setup remain separate.
 
 ## Installation, updates and rollback — English
 

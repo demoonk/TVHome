@@ -28,6 +28,15 @@ esac
 installed=$("$adb" -s "$device" install -r "$apk")
 printf '%s\n' "$installed"
 printf '%s\n' "$installed" | tr -d '\r' | grep -q '^Success$' || { echo 'Installation did not report Success; launch aborted' >&2; exit 1; }
+# Reapply after every installation: Android may reset app-op permissions.
+for operation in SYSTEM_ALERT_WINDOW GET_USAGE_STATS; do
+    "$adb" -s "$device" shell appops set ru.pda.tvhome "$operation" allow
+    permission=$("$adb" -s "$device" shell appops get ru.pda.tvhome "$operation")
+    if ! printf '%s\n' "$permission" | grep -E "${operation}: allow(;|[[:space:]]|$)" >/dev/null; then
+        echo "APK installed, but $operation was not granted: $permission. Clock setup incomplete." >&2
+        exit 1
+    fi
+done
 started=$("$adb" -s "$device" shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME -n ru.pda.tvhome/ru.pda.tvhome.MainActivity)
 printf '%s\n' "$started"
 if printf '%s\n' "$started" | grep -Ei '^Error:|Exception' >/dev/null; then echo 'APK installed but TVHome could not start' >&2; exit 1; fi

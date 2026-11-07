@@ -21,6 +21,11 @@ if($Arguments -contains 'install'){
  if($env:FAKE_FAIL -eq '1'){Write-Output 'Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]';exit 0}
  Write-Output 'Success';exit 0
 }
+if($Arguments -contains 'appops'){
+ if($Arguments -contains 'get'){
+  $op=$Arguments[-1]; if($env:FAKE_PERMISSION_FAIL -eq '1'){Write-Output ($op + ': default')}else{Write-Output ($op + ': allow')}
+ };exit 0
+}
 if($Arguments -contains 'start'){Write-Output 'Status: ok';exit 0}
 exit 1
 """
@@ -32,20 +37,22 @@ case " $* " in
  *' getprop '*) echo "$FAKE_SDK";;
  *' pm path '*) exit 0;;
  *' install '*) if [ "$FAKE_FAIL" = 1 ]; then echo 'Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]'; else echo Success; fi;;
+ *' appops set '*) exit 0;;
+ *' appops get '*) for op do :; done; if [ "$FAKE_PERMISSION_FAIL" = 1 ]; then echo "$op: default"; else echo "$op: allow"; fi;;
  *' am start '*) echo 'Status: ok';;
  *) exit 1;;
 esac
 """
 
 class InstallersTest(unittest.TestCase):
-    def scenario(self, kind, sdk="34", fail="0"):
+    def scenario(self, kind, sdk="34", fail="0", permission_fail="0"):
         with tempfile.TemporaryDirectory(prefix="installer-test-", dir=ROOT / "tests") as temp:
             work = Path(temp).resolve()
             assert work.is_relative_to(ROOT)
             log = work / "adb.log"
             apk = work / "update with spaces.apk"
             apk.write_bytes(b"fake APK handled by stub only")
-            env = dict(os.environ, FAKE_ADB_LOG=str(log), FAKE_SDK=sdk, FAKE_FAIL=fail)
+            env = dict(os.environ, FAKE_ADB_LOG=str(log), FAKE_SDK=sdk, FAKE_FAIL=fail, FAKE_PERMISSION_FAIL=permission_fail)
             if kind == "ps":
                 fake = work / "fake-adb.ps1"
                 fake.write_text(FAKE_PS, encoding="utf-8")
@@ -64,6 +71,12 @@ class InstallersTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertIn("install -r ", calls)
         self.assertIn("ru.pda.tvhome/ru.pda.tvhome.MainActivity", calls)
+        for operation in ["SYSTEM_ALERT_WINDOW", "GET_USAGE_STATS"]:
+            grant = "appops set ru.pda.tvhome " + operation + " allow"
+            self.assertIn(grant, calls)
+            self.assertIn("appops get ru.pda.tvhome " + operation, calls)
+            self.assertLess(calls.index("install -r"), calls.index(grant))
+            self.assertLess(calls.index(grant), calls.index("am start"))
         for forbidden in ["uninstall", "disable-user", "pm clear", "set-home-activity", "force-stop"]:
             self.assertNotIn(forbidden, calls)
 
@@ -71,6 +84,7 @@ class InstallersTest(unittest.TestCase):
         result, calls = self.scenario(kind, fail="1")
         self.assertNotEqual(0, result.returncode)
         self.assertNotIn("am start", calls)
+        self.assertNotIn("appops", calls)
 
     def check_old_android(self, kind):
         result, calls = self.scenario(kind, sdk="25")
@@ -78,6 +92,16 @@ class InstallersTest(unittest.TestCase):
         self.assertNotIn("install -r", calls)
         self.assertNotIn("am start", calls)
 
+    def check_permission_failure(self, kind):
+        result, calls = self.scenario(kind, permission_fail="1")
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("appops set", calls)
+        self.assertNotIn("am start", calls)
+
+    @unittest.skipUnless(PS, "PowerShell unavailable")
+    def test_powershell_permission_failure(self): self.check_permission_failure("ps")
+    @unittest.skipUnless(BASH, "Bash unavailable")
+    def test_shell_permission_failure(self): self.check_permission_failure("sh")
     @unittest.skipUnless(PS, "PowerShell unavailable")
     def test_powershell_success(self): self.check_success("ps")
     @unittest.skipUnless(PS, "PowerShell unavailable")
