@@ -32,8 +32,6 @@ final class WallpaperSource {
     /** "Режим смены обоев" while the folder is the source: Home shows the next picture now. */
     static void requestNext(Context c){prefs(c).edit().putBoolean(NEXT,true).apply();}
     static boolean consumeNext(Context c){boolean pending=prefs(c).getBoolean(NEXT,false);if(pending)prefs(c).edit().remove(NEXT).apply();return pending;}
-    static int animation(Context c){int n=prefs(c).getInt("wallpaper_animation",0);return n>=0&&n<=2?n:0;}
-    static int animationSeconds(Context c){int n=prefs(c).getInt("wallpaper_animation_seconds",60);return n>=30&&n<=120&&n%30==0?n:60;}
     static final String NEXT="background_next";
 
     static String name(Context c,String key){if(key.equals(FILE)){String label=prefs(c).getString("background_file_label","");if(!label.isEmpty())return label;}String value=prefs(c).getString(key,"");if(value.isEmpty())return "Не выбран";if(value.startsWith("media:"))return value.substring(6);try(Cursor row=c.getContentResolver().query(Uri.parse(value),new String[]{"_display_name"},null,null,null)){if(row!=null&&row.moveToFirst())return row.getString(0);}catch(Exception ignored){}return Uri.parse(value).getLastPathSegment();}

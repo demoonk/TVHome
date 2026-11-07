@@ -1,8 +1,17 @@
 # TVHome
 
-## Версия 2.0.0
+## Версия 2.0.3
 
-Обновление устанавливается поверх TVHome 1.x с сохранением данных и исходной подписи. Изменены поиск, возврат из приложений и восстановление селектора; основные Java-классы перенесены в `ru.pda.tvhome`. Подробности совместимости, необязательный мостик физической кнопки Back и откат описаны в [переходе на 2.0.0](docs/migration-2.0.0.md).
+Обновление устанавливается поверх TVHome 1.x и 2.x с сохранением данных и исходной подписи.
+
+- Обновлены поиск и меню «Входы»/VPN: тонкие шрифты и рамки, пружинный селектор, белая галочка VPN.
+- В поиске убрана голубая лупа; кнопки «Найти» и «Закрыть» заменены иконками поиска и выхода. Плитки и селектор не обрезаются справа.
+- Исправлены прокрутка до последнего ряда и движение селектора обратно вверх, форма и восстановление фокуса кнопок шапки.
+- Повторный Home на главном экране выбирает первую плитку и возвращает начало списка без перезапуска видеообоев. Исправлено исчезновение рамки после Home.
+- После пробуждения сразу показывается сохранённый кадр обоев, пока готовится видео.
+- Очищен список встроенных видеообоев: локальные видео, Aerial Community, NASA, Wikimedia Commons и папка с видео. Удалены лишние источники и анимация сдвига/наезда; плавная смена сохранена.
+
+Совместимость миграции, необязательный мостик физической кнопки Back и откат описаны в [переходе на 2.0.0](docs/migration-2.0.0.md).
 
 
 Лаунчер для Android TV (Chiq-based TV, Dexp, Tuvio). Личный форк [CleanYourTV](https://github.com/Gathin23/cleanyourtv), MIT.
@@ -45,16 +54,16 @@
 Windows, PowerShell:
 
 ```powershell
-.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.0.apk" -Adb "C:\platform-tools\adb.exe"
+.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.3.apk" -Adb "C:\platform-tools\adb.exe"
 ```
 
 macOS / Linux:
 
 ```sh
-sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.0.apk" "./platform-tools/adb"
+sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.3.apk" "./platform-tools/adb"
 ```
 
-Если PowerShell блокирует запуск скачанного скрипта, после проверки его содержимого можно выполнить один запуск через `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.0.apk" -Adb "C:\platform-tools\adb.exe"`. Этот параметр не меняет постоянную политику выполнения системы.
+Если PowerShell блокирует запуск скачанного скрипта, после проверки его содержимого можно выполнить один запуск через `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.3.apk" -Adb "C:\platform-tools\adb.exe"`. Этот параметр не меняет постоянную политику выполнения системы.
 
 Скрипты требуют явного выбора устройства, проверяют доступ к ADB и API 26+, сохраняют доступный установленный APK в `backups/`, выполняют `install -r` и открывают `ru.pda.tvhome/ru.pda.tvhome.MainActivity` только после `Success`. Ошибка установки останавливает скрипт. Данные не очищаются; штатный Home не отключается, настройки по умолчанию и службы доступности не меняются. Выберите Home через системные настройки самостоятельно. Не используйте старый upstream-скрипт `build-and-install`: для отдельного репозитория TVHome предназначены эти самостоятельные установщики.
 
@@ -62,7 +71,7 @@ sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.0.apk" "./platform-tools/adb"
 
 ```powershell
 .\adb.exe connect TV_ADDRESS:PORT
-.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-2.0.0.apk"
+.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-2.0.3.apk"
 .\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/ru.pda.tvhome.MainActivity
 ```
 
@@ -110,16 +119,16 @@ Download the APK and `install.ps1` or `install.sh` from the [latest release](htt
 Windows PowerShell:
 
 ```powershell
-.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.0.apk" -Adb "C:\platform-tools\adb.exe"
+.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.3.apk" -Adb "C:\platform-tools\adb.exe"
 ```
 
 macOS / Linux:
 
 ```sh
-sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.0.apk" "./platform-tools/adb"
+sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.3.apk" "./platform-tools/adb"
 ```
 
-If PowerShell blocks a downloaded script, review its contents and use a single invocation with `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.0.apk" -Adb "C:\platform-tools\adb.exe"`. This does not change the persistent system execution policy.
+If PowerShell blocks a downloaded script, review its contents and use a single invocation with `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.3.apk" -Adb "C:\platform-tools\adb.exe"`. This does not change the persistent system execution policy.
 
 The scripts require an explicit device, check ADB authorization and API 26+, back up any discoverable installed APK to `backups/`, run `install -r`, and launch `ru.pda.tvhome/ru.pda.tvhome.MainActivity` only after installation reports `Success`. Installation errors stop the script. They do not clear app data, disable the stock Home, change default apps or modify accessibility services. Choose the Home app in system Settings yourself. Use these standalone installers for this repository rather than the legacy upstream `build-and-install` script.
 
@@ -127,7 +136,7 @@ Manual alternative from the Platform-Tools directory:
 
 ```powershell
 .\adb.exe connect TV_ADDRESS:PORT
-.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-2.0.0.apk"
+.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-2.0.3.apk"
 .\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/ru.pda.tvhome.MainActivity
 ```
 
@@ -174,7 +183,7 @@ cd launcher
 Пример схемы (SHA-256 нужно заменить фактическим):
 
 ```json
-{"versionCode":77,"versionName":"2.0.0","apkName":"TVHome-2.0.0.apk","sha256":"<64 hexadecimal characters>"}
+{"versionCode":86,"versionName":"2.0.3","apkName":"TVHome-2.0.3.apk","sha256":"<64 hexadecimal characters>"}
 ```
 
 Приложение читает Releases API без авторизации; токенов GitHub внутри APK нет. Проверяются SHA-256, packageName, повышение versionCode и совпадение сертификатов подписи перед передачей APK системному установщику.
@@ -193,6 +202,6 @@ Since 1.4.21, say “Алиса, <message>” to open Alice in Yandex Browser an
 
 ## Проверка
 
-Для 2.0.0 выполнены `testReleaseUnitTest`, `lintRelease`, `assembleRelease`. Код проверки обновлений покрыт JVM-тестами правил URL, имени APK и SHA-256. Проверка визуального интерфейса и установки обновления на реальном ТВ обязательна отдельно.
+Для 2.0.3 выполнены `testReleaseUnitTest`, `lintRelease`, `assembleRelease`. Код проверки обновлений покрыт JVM-тестами правил URL, имени APK и SHA-256. Проверка визуального интерфейса и установки обновления на реальном ТВ обязательна отдельно.
 
 Проверка установщиков / Installer checks: `python -m unittest discover -s tests -v` (PowerShell и Bash запускаются с подставным ADB; телевизор не меняется / fake ADB, no TV changes).

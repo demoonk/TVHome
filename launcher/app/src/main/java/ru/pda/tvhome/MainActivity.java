@@ -304,6 +304,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean promptsPaused;
     /** Between onStop and onStart: Home was fully covered by an app, not just by the translucent quick panel. */
     private boolean stopped;
+    private boolean homeResetPending;
     /** Between onStart and onStop: Home is (at least partly) on screen. */
     private boolean started;
     /** Rebuild the tiles on the way back to Home only when apps changed meanwhile (TileRefresh). */
@@ -827,6 +828,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             boolean gridTile = inViewGroup(newView, R.id.grid);
             boolean animate = animations && !reducedMotion && !settlingFocus;
             if (header && newView != null) {
+                if (homeResetPending) return;
                 rememberedHeaderFocus = newView.getId();
 
                 if (glowCore != null) glowCore.animate().alpha(0f).setDuration(180).start();
@@ -1001,7 +1003,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /**
      * Home pressed while Home is already in front: singleTask delivers it here, then onResume runs.
-     * Home restores the previous tile by stable key, including when returning from another app.
+     * On Home itself it resets the grid; returning from another app keeps the saved tile identity.
      */
     @Override
     protected void onNewIntent(Intent intent) {
@@ -1025,7 +1027,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (stopped) {
             tileRefresh.onHomeAgain();
         } else {
-            // The tiles are current; restore their remembered focus without replaying their entrance.
+            // A repeated HOME only resets navigation; the current wallpaper keeps playing.
+            homeResetPending = true;
+            rememberedHeaderFocus = View.NO_ID;
+            lastFocused = 0;
+            lastFocusedKey = adapter.keyAt(0);
+            libraryFocusPending = false;
+            cancelPendingFocusScroll();
+            grid.stopScroll();
+            ((GridLayoutManager) grid.getLayoutManager()).scrollToPositionWithOffset(0, 0);
             restoreFocus();
         }
     }
@@ -1035,7 +1045,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onStart() {
         super.onStart();
-        stopped = false;
         started = true;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(timeReceiver, timeFilter, Context.RECEIVER_NOT_EXPORTED);
@@ -1049,6 +1058,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onResume() {
         super.onResume();
+        stopped = false;
+        stopWallpaperOnStop = false;
         settlingFocus = true;
         OverlayService.wake();
         undim(false);
@@ -1354,8 +1365,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         final int request = ++focusRestoreGeneration;
         grid.post(() -> {
             if (request != focusRestoreGeneration || isFinishing() || isDestroyed() || !updateForeground || !hasWindowFocus()) return;
-            final String returnKey = lastFocusedKey;
-            final int returnHeader = rememberedHeaderFocus;
+            final String returnKey = homeResetPending ? adapter.keyAt(0) : lastFocusedKey;
+            final int returnHeader = homeResetPending ? View.NO_ID : rememberedHeaderFocus;
             settlingFocus = true;
             tilesReady = true;
             View header = returnHeader == View.NO_ID ? null : findViewById(returnHeader);
@@ -1447,7 +1458,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         root.removeCallbacks(showIdleClock);
         undim(false);   // Home never stays dimmed over another app
         endReorder();   // Home or another app while reordering keeps the order so far
-        if (!keepWallpaperOnPause) wallpaperPlayer.stop();
+        // singleTask HOME briefly pauses this same activity before onNewIntent/onResume.
+        // Release video only if Home actually becomes hidden, not during that focus-only round trip.
+        stopWallpaperOnStop = !keepWallpaperOnPause;
         keepWallpaperOnPause = false;
         hero.animate().cancel();
         heroArt.animate().cancel();
@@ -1467,6 +1480,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onStop() {
         super.onStop();
+        if (stopWallpaperOnStop) wallpaperPlayer.stop();
+        stopWallpaperOnStop = false;
         started = false;
         unregisterReceiver(timeReceiver);
         handler.removeCallbacks(clockCheck);
@@ -2032,6 +2047,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     public void onTileFocused(int position, View card) {
         if (!tilesReady || !updateForeground) return;
+        if (homeResetPending) {
+            if (position != 0) return;
+            rememberedHeaderFocus = View.NO_ID;
+            lastFocusedKey = adapter.keyAt(0);
+            homeResetPending = false;
+        }
         if (settlingFocus && (rememberedHeaderFocus != View.NO_ID || position != HomeFocus.position(lastFocusedKey, adapter::positionOf))) return;
         rememberedHeaderFocus = View.NO_ID;
         placeGlowCore(position, adapter.ambientColorAt(position));
@@ -2124,6 +2145,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             glassAccent = accent;
             glass.setAccent(accent);
         }
+        // HOME can interrupt a header/library fade while glassShown still describes the old tile.
+        // A restored tile must restore opacity too, not only the contour's geometry.
+        if (snap || glassShown && !dimmed && glass.getAlpha() < .99f) {
+            glass.animate().cancel();
+            if (!dimmed) glass.setAlpha(1f);
+        }
         if (!glassShown) {
             springX.cancel();
             springY.cancel();
@@ -2166,7 +2193,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         root.offsetDescendantRectToMyCoords(card, actual);
         float x = actual.exactCenterX() - w / 2f;
         float y = actual.exactCenterY() - h / 2f - (advancedEffects ? 4f * density : 0f);
-        if (!glassShown || card.getWidth() != glassCardW || glass.getWidth() != w || glass.getHeight() != h
+        if (!glassShown || !dimmed && glass.getAlpha() < .99f
+                || card.getWidth() != glassCardW || glass.getWidth() != w || glass.getHeight() != h
                 || Math.abs(glassTargetX - x) > 1f || Math.abs(glassTargetY - y) > 1f) {
             fitTileGlass(pos, card, true);
             boolean wasSettling = settlingFocus;
@@ -3129,47 +3157,64 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         List<String> apps=VpnCatalog.installed(this);vpnPackages.clear();vpnPackages.addAll(apps);
         if(apps.isEmpty()){Toast.makeText(this,"VPN-приложения не установлены",Toast.LENGTH_SHORT).show();return;}
         final String active=currentVpnPackage();
-        final android.app.Dialog dialog=new android.app.Dialog(this);
-        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE);
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
-        android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();
-        bg.setColor(0xFF0F1318);bg.setCornerRadius(16*density);root.setBackground(bg);
-        root.setPadding(Math.round(6*density),Math.round(12*density),Math.round(6*density),Math.round(12*density));
-        TextView title=new TextView(this);title.setText("VPN-приложения");title.setTextColor(0xFFCFD4DA);title.setTextSize(14);
-        title.setPadding(Math.round(20*density),Math.round(8*density),Math.round(20*density),Math.round(10*density));
-        root.addView(title);
-        for(String pkg:apps){
-            final boolean on=pkg.equals(active);
-            final LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(Math.round(20*density),Math.round(13*density),Math.round(20*density),Math.round(13*density));
-            final android.graphics.drawable.GradientDrawable rb=new android.graphics.drawable.GradientDrawable();
-            rb.setColor(on?0xFF1D242C:0xFF161B21);rb.setCornerRadius(12*density);row.setBackground(rb);
-            row.setFocusable(true);row.setClickable(true);
-            ImageView icon=new ImageView(this);
-            android.graphics.drawable.GradientDrawable circle=new android.graphics.drawable.GradientDrawable();
-            circle.setShape(android.graphics.drawable.GradientDrawable.OVAL);circle.setColor(0xFF263041);
-            icon.setBackground(circle);icon.setImageResource(R.drawable.ic_shield);
-            icon.setImageTintList(android.content.res.ColorStateList.valueOf(0xFFCFD4DA));
-            int ip=Math.round(9*density);icon.setPadding(ip,ip,ip,ip);
-            row.addView(icon,new LinearLayout.LayoutParams(Math.round(38*density),Math.round(38*density)));
-            LinearLayout copy=new LinearLayout(this);copy.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,1);cp.leftMargin=Math.round(14*density);copy.setLayoutParams(cp);
-            TextView label=new TextView(this);label.setText(VpnCatalog.label(this,pkg));label.setTextColor(0xFFE8EAED);label.setTextSize(16);copy.addView(label);
-            if(on){TextView sub=new TextView(this);sub.setText("Tunnel active");sub.setTextColor(0xFF9AA0A6);sub.setTextSize(11.5f);copy.addView(sub);}
-            row.addView(copy);
-            TextView mark=new TextView(this);mark.setText(on?"\u2713":"");mark.setTextColor(0xFF8AB4F8);mark.setTextSize(20);row.addView(mark);
-            LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2);rp.bottomMargin=Math.round(4*density);row.setLayoutParams(rp);
-            row.setOnClickListener(v->{dialog.dismiss();openVpnApp(pkg);});
-            row.setOnFocusChangeListener((v,hasFocus)->rb.setColor(hasFocus?0xFF263041:(on?0xFF1D242C:0xFF161B21)));
-            root.addView(row);
+        View anchor = vpnButtons.isEmpty() ? findViewById(R.id.btnSettings) : vpnButtons.get(0);
+        View content = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        SearchFocusFrame panel = new SearchFocusFrame(this, content);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        PopupWindow popup = glassPopup(panel, Math.round(220 * density));
+        for (String pkg : apps) {
+            View row = getLayoutInflater().inflate(R.layout.item_input, rows, false);
+            ((ImageView) row.findViewById(R.id.icon)).setImageResource(R.drawable.ic_shield);
+            ((TextView) row.findViewById(R.id.title)).setText(VpnCatalog.label(this, pkg));
+            row.findViewById(R.id.dot).setVisibility(View.GONE);
+            TextView mark = row.findViewById(R.id.status);
+            // A remembered provider is not necessarily an active tunnel.
+            mark.setVisibility(vpnActive && pkg.equals(active) ? View.VISIBLE : View.GONE);
+            mark.setDuplicateParentStateEnabled(false);
+            mark.setText("\u2713");
+            mark.setTextSize(20);
+            mark.setTextColor(Color.WHITE);
+            row.setOnClickListener(v -> { popup.dismiss(); openVpnApp(pkg); });
+            // Do not treat the long-press OK release as a click on the first row.
+            final boolean[] pressed = {false};
+            row.setOnKeyListener((v, key, event) -> {
+                if (key != KeyEvent.KEYCODE_DPAD_CENTER && key != KeyEvent.KEYCODE_ENTER) return false;
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    if (event.getRepeatCount() == 0) pressed[0] = true;
+                } else {
+                    boolean activate = pressed[0] && !event.isCanceled();
+                    pressed[0] = false;
+                    if (activate) v.performClick();
+                }
+                return true;
+            });
+            rows.addView(row);
         }
-        dialog.setContentView(root);
-        if(dialog.getWindow()!=null){
-            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(0x00000000));
-            dialog.getWindow().setLayout(Math.round(560*density),android.view.WindowManager.LayoutParams.WRAP_CONTENT);
-        }
-        dialog.show();
+        styleSourceMenu(panel, rows);
+        dropIn(popup, panel, anchor, Gravity.END);
+        rows.getChildAt(0).requestFocus();
     }
+
+    /** Shared neutral menu typography and the same thin contour used by search and Home. */
+    private void styleSourceMenu(SearchFocusFrame panel, LinearLayout rows) {
+        android.content.res.ColorStateList tint = new android.content.res.ColorStateList(
+                new int[][] {new int[] {android.R.attr.state_focused}, new int[0]},
+                new int[] {Color.WHITE, 0xFFB1B3B8});
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View row = rows.getChildAt(i);
+            TextView title = row.findViewById(R.id.title);
+            if (title == null) continue; // separator
+            row.setBackgroundColor(Color.TRANSPARENT);
+            title.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+            title.setTextColor(tint);
+            ((ImageView) row.findViewById(R.id.icon)).setImageTintList(tint);
+            TextView status = row.findViewById(R.id.status);
+            status.setTypeface(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL));
+            if (status.isDuplicateParentStateEnabled()) status.setTextColor(tint);
+            panel.track(row, 13);
+        }
+    }
+
     private void updateVpnButtons(){
         String pkg=currentVpnPackage();
         for(TextView button:vpnButtons){
@@ -3182,6 +3227,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** True while Home is paused to its own launcher settings: the current wallpaper layer is kept,
      *  so "Режим смены обоев" can cross-fade from the old picture instead of fading in from black. */
     private boolean keepWallpaperOnPause;
+    private boolean stopWallpaperOnStop;
 
     /** Puts the tile spotlight on the focused tile, in its accent colour, at the chosen brightness. */
     private void placeGlowCore(int position, int color) {
@@ -3617,7 +3663,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // keeps its usual place.
         boolean underGear = topMenu;
         View anchor = findViewById(underGear ? R.id.btnSettings : R.id.btnInputs);
-        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        View content = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        SearchFocusFrame panel = new SearchFocusFrame(this, content);
         LinearLayout rows = panel.findViewById(R.id.rows);
 
         // Compact: as wide as the Inputs pill (a touch wider so "HDMI 1" fits), hanging right below it.
@@ -3766,6 +3813,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             Toast.makeText(this, R.string.no_inputs, Toast.LENGTH_SHORT).show();
             return;
         }
+
+        styleSourceMenu(panel, rows);
 
         // Fit the widest row: TVs that report a status on every port (Sony) would otherwise squeeze the names out.
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);

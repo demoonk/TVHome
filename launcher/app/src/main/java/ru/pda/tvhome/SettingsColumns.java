@@ -102,21 +102,16 @@ final class SettingsColumns {
                     list.addView(row(BuiltinWallpapers.NAMES[n],BuiltinWallpapers.DETAILS[n],true,()->{WallpaperSource.prefs(activity).edit().putBoolean("wallpaper_source_"+id,!on).apply();
                         if(id.equals("local")&&!on){String permission=android.os.Build.VERSION.SDK_INT>=33?android.Manifest.permission.READ_MEDIA_VIDEO:android.Manifest.permission.READ_EXTERNAL_STORAGE;if(activity.checkSelfPermission(permission)!=android.content.pm.PackageManager.PERMISSION_GRANTED)activity.requestPermissions(new String[]{permission},WallpaperSettings.MEDIA_PERMISSION);}
                         WallpaperSource.changed(activity);showGroup(group,true);},on,null));
-                    if(BuiltinWallpapers.isImport(id))list.addView(row("Папка · "+BuiltinWallpapers.NAMES[n],WallpaperSource.prefs(activity).getString("wallpaper_import_"+id,"Не выбрана"),true,()->activity.startActivityForResult(new android.content.Intent(activity,WallpaperBrowserActivity.class).putExtra("folder",true).putExtra("wallpaper_import_source",id),WallpaperSettings.PICK_FOLDER),null,null));
-                    if(id.equals("catalog"))list.addView(row("Адрес HTTPS-каталога",WallpaperSource.prefs(activity).getString("wallpaper_catalog_url","Не задан"),true,()->{
-                        EditText input=new EditText(activity);input.setSingleLine();input.setInputType(android.text.InputType.TYPE_CLASS_TEXT|android.text.InputType.TYPE_TEXT_VARIATION_URI);input.setText(WallpaperSource.prefs(activity).getString("wallpaper_catalog_url",""));
-                        new android.app.AlertDialog.Builder(activity).setTitle("HTTPS-каталог: {items: [{url, name}]}").setView(input).setPositiveButton("Сохранить",(dialog,which)->{String address=input.getText().toString().trim();if(!address.startsWith("https://")){Toast.makeText(activity,"Нужен HTTPS-адрес",Toast.LENGTH_LONG).show();return;}WallpaperSource.prefs(activity).edit().putString("wallpaper_catalog_url",address).apply();new java.io.File(activity.getCacheDir(),"wallpaper-catalog-catalog.json").delete();WallpaperSource.changed(activity);showGroup(group,true);}).setNegativeButton("Отмена",null).show();
-                    },null,null));
+                    if(BuiltinWallpapers.IMPORT_ID.equals(id))list.addView(row("Выбрать папку",WallpaperSource.prefs(activity).getString("wallpaper_import_"+id,"Не выбрана"),true,()->activity.startActivityForResult(new android.content.Intent(activity,WallpaperBrowserActivity.class).putExtra("folder",true).putExtra("wallpaper_import_source",id),WallpaperSettings.PICK_FOLDER),null,null));
+
                 }
-                list.addView(row("Следующие видеообои",null,true,()->{WallpaperSource.requestNext(activity);activity.finish();},null,null));
+                list.addView(row("Выбор видеообоев",null,true,()->{WallpaperSource.requestNext(activity);activity.finish();},null,null));
             }
-            if(mode.equals("file")||mode.equals("folder")||mode.equals("builtin")||mode.equals("app")){
-                String[] effects={"Выключена","Сдвиг","Наезд"};int effect=WallpaperSource.animation(activity);
-                list.addView(row("Анимация обоев",effects[effect],true,()->choose("Анимация обоев",effects,effect,i->{WallpaperSource.prefs(activity).edit().putInt("wallpaper_animation",i).apply();WallpaperSource.changed(activity);}),null,null));
-                int seconds=WallpaperSource.animationSeconds(activity);
-                list.addView(row("Время анимации",seconds+" сек.",effect!=0,()->choose("Время одного движения",new String[]{"30 сек.","60 сек.","90 сек.","120 сек."},seconds/30-1,i->{WallpaperSource.prefs(activity).edit().putInt("wallpaper_animation_seconds",(i+1)*30).apply();WallpaperSource.changed(activity);}),null,null));
-            }
-            list.addView(row("Плавное появление и смена","3 секунды",false,()->{},null,null));
+            View transition = row("Плавное появление и смена", "3 секунды", true, () -> {}, null, null);
+            // Informational rows still take focus so Down reveals the bottom of the settings list.
+            transition.setClickable(false);
+            ((android.view.ViewGroup) transition).getChildAt(1).setVisibility(View.INVISIBLE);
+            list.addView(transition);
         }
         if(group==2){
             android.content.SharedPreferences prefs=activity.getSharedPreferences(Config.SETTINGS_NAME,0);

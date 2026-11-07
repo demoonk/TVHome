@@ -8,25 +8,24 @@ import java.io.*;
 
 /** Independent public catalogs, cached separately so a failed source cannot erase the others. */
 final class BuiltinWallpapers {
-    static final String[] IDS={"local","aerial","nasa","commons","catalog","coverr","pixabay","pexels","unsplash","wallhaven","motionbgs","mylivewallpapers"};
-    static final String[] NAMES={"Локальные видео","Aerial Community","NASA","Wikimedia Commons","Собственный HTTPS-каталог","Coverr","Pixabay","Pexels","Unsplash","Wallhaven","MotionBGS / MoeWalls","MyLiveWallpapers"};
-    static final String[] DETAILS={"Видео из локальной медиатеки ТВ","Пейзажи · 1080p H.264 · Jetson Creative","Земля и космос · NASA Image and Video Library","Пейзажи · автор и лицензия в названии ролика","JSON со ссылками на видео","Импорт скачанных видео из папки","Импорт скачанных видео из папки","Импорт скачанных видео из папки","Импорт скачанных изображений из папки","Импорт скачанных изображений из папки","Импорт скачанных видео из папки","Импорт скачанных видео из папки"};
+    static final String IMPORT_ID="mylivewallpapers";
+    static final String[] IDS={"local","aerial","nasa","commons",IMPORT_ID};
+    static final String[] NAMES={"Локальные видео","Aerial Community","NASA","Wikimedia Commons","Папка с видео"};
+    static final String[] DETAILS={"Видео из локальной медиатеки ТВ","Пейзажи · 1080p H.264 · Jetson Creative","Земля и космос · NASA Image and Video Library","Пейзажи · автор и лицензия в названии ролика","Импорт скачанных видео из папки"};
     static boolean enabled(Context c,String id){return WallpaperSource.prefs(c).getBoolean("wallpaper_source_"+id,"aerial".equals(id));}
     static List<WallpaperSource.Item> collection(Context c){
         List<WallpaperSource.Item> out=new ArrayList<>();
         for(String id:IDS){if(!enabled(c,id))continue;
-            String folder=WallpaperSource.prefs(c).getString("wallpaper_import_"+id,null);
-            if(isImport(id)){if(folder!=null)for(WallpaperSource.Item i:WallpaperSource.media(c))if(WallpaperSource.folderMatches(folder,i.folder)&&i.video!=Arrays.asList("unsplash","wallhaven").contains(id))out.add(i);continue;}
+            if(IMPORT_ID.equals(id)){String folder=WallpaperSource.prefs(c).getString("wallpaper_import_"+IMPORT_ID,null);if(folder!=null)for(WallpaperSource.Item i:WallpaperSource.media(c))if(i.video&&WallpaperSource.folderMatches(folder,i.folder))out.add(i);continue;}
             if(id.equals("local")){for(WallpaperSource.Item i:WallpaperSource.media(c))if(i.video)out.add(i);continue;}
             File cache=new File(c.getCacheDir(),"wallpaper-catalog-"+id+".json");
             JSONArray entries=null;
             try{if(cache.isFile()&&System.currentTimeMillis()-cache.lastModified()<86400000L)entries=new JSONArray(read(cache));}catch(Exception ignored){}
-            if(entries==null)try{entries=id.equals("catalog")?new JSONObject(WebData.get(WallpaperSource.prefs(c).getString("wallpaper_catalog_url",""),null)).getJSONArray("items"):fetch(id);try(FileOutputStream f=new FileOutputStream(cache)){f.write(entries.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));}}catch(Exception failure){try{entries=new JSONArray(read(cache));}catch(Exception ignored){}}
+            if(entries==null)try{entries=fetch(id);try(FileOutputStream f=new FileOutputStream(cache)){f.write(entries.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));}}catch(Exception failure){try{entries=new JSONArray(read(cache));}catch(Exception ignored){}}
             if(entries!=null)for(int n=0;n<entries.length();n++){JSONObject e=entries.optJSONObject(n);if(e==null)continue;String url=e.optString("url");if(url.startsWith("https://"))out.add(new WallpaperSource.Item(Uri.parse(url),e.optString("name"),id,0,true));}
         }
         return out;
     }
-    static boolean isImport(String id){return !Arrays.asList("local","aerial","nasa","commons","catalog").contains(id);}
     private static String read(File f)throws IOException{try(FileInputStream in=new FileInputStream(f);ByteArrayOutputStream out=new ByteArrayOutputStream()){if(f.length()>4*1024*1024)throw new IOException();byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);return out.toString("UTF-8");}}
     private static void add(JSONArray out,String url,String name)throws JSONException{if(url.startsWith("https://"))out.put(new JSONObject().put("url",url).put("name",name));}
     private static JSONArray fetch(String id)throws Exception{

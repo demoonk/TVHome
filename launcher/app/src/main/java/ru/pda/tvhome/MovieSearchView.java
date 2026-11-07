@@ -40,6 +40,7 @@ final class MovieSearchView extends LinearLayout {
     };
     private volatile boolean closed;
     private android.widget.EditText queryInput;
+    private final SearchFocusFrame focusFrame;
 
     String queryText() { return queryInput.getText().toString(); }
 
@@ -50,18 +51,15 @@ final class MovieSearchView extends LinearLayout {
         setOrientation(VERTICAL);
         setBackgroundColor(Color.rgb(12, 17, 27));
         setPadding(dp(36), dp(24), dp(28), dp(12));
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(VERTICAL);
+        // Reserve the contour's 3dp outset, including at the rightmost header action.
+        content.setPadding(dp(4), dp(4), dp(4), dp(4));
+        focusFrame = new SearchFocusFrame(activity, content);
+        focusFrame.getChildAt(0).setLayoutParams(new android.widget.FrameLayout.LayoutParams(-1, -1));
+        addView(focusFrame, new LayoutParams(-1, 0, 1));
         LinearLayout header = new LinearLayout(activity);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        View icon = new View(activity) {
-            private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-            @Override protected void onDraw(android.graphics.Canvas canvas) {
-                paint.setColor(0xff8cc7ff); paint.setStyle(android.graphics.Paint.Style.STROKE);
-                paint.setStrokeWidth(dp(3)); paint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
-                canvas.drawCircle(dp(19), getHeight() / 2f - dp(3), dp(10), paint);
-                canvas.drawLine(dp(26), getHeight() / 2f + dp(4), dp(35), getHeight() / 2f + dp(13), paint);
-            }
-        };
-        header.addView(icon, new LayoutParams(dp(50), dp(58)));
         android.widget.EditText recognized = new android.widget.EditText(activity);
         queryInput = recognized;
         recognized.setText(query);
@@ -85,23 +83,26 @@ final class MovieSearchView extends LinearLayout {
                     && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER) { submit.run(); return true; }
             return false;
         });
-        recognized.setTypeface(null, Typeface.BOLD);
+        recognized.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
         recognized.setMaxLines(2);
         header.addView(recognized, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
-        header.addView(action("Найти", submit), new LayoutParams(dp(90), dp(44)));
-        TextView back = action("Закрыть", activity::finish);
-        header.addView(back, new LayoutParams(dp(100), dp(44)));
-        addView(header);
+        View find = iconAction("Найти", R.drawable.ic_search_action, submit);
+        header.addView(find, new LayoutParams(dp(48), dp(48)));
+        View back = iconAction("Закрыть поиск", R.drawable.ic_search_exit, activity::finish);
+        LayoutParams backParams = new LayoutParams(dp(48), dp(48));
+        backParams.leftMargin = dp(12);
+        header.addView(back, backParams);
+        content.addView(header);
         TextView hint = text("Фильмы и сериалы", 14, 0xff91a0b7);
-        hint.setPadding(dp(50), 0, 0, dp(18));
-        addView(hint);
+        hint.setPadding(0, dp(8), 0, dp(18));
+        content.addView(hint);
         ScrollView scroll = new ScrollView(activity);
         scroll.setFillViewport(true);
         scroll.setClipToPadding(false);
         LinearLayout rows = new LinearLayout(activity);
         rows.setOrientation(VERTICAL);
         scroll.addView(rows);
-        addView(scroll, new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
+        content.addView(scroll, new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1));
         back.requestFocus();
         final int[] firstResultRow = {Integer.MAX_VALUE};
         if (apps.isEmpty()) {
@@ -131,6 +132,9 @@ final class MovieSearchView extends LinearLayout {
             LinearLayout cards = new LinearLayout(activity);
             cards.setPadding(dp(4), dp(5), dp(4), dp(5));
             horizontal.addView(cards);
+            horizontal.addOnLayoutChangeListener((v, l, t, r, b, oldL, oldT, oldR, oldB) -> {
+                if (r - l != oldR - oldL) fitCards(horizontal, cards);
+            });
             section.addView(horizontal);
             rows.addView(section);
             if (!MediaSearch.canReadResults(activity, app)) {
@@ -168,8 +172,11 @@ final class MovieSearchView extends LinearLayout {
                             if (rowOrder < firstResultRow[0]) {
                                 firstResultRow[0] = rowOrder;
                                 back.setNextFocusDownId(card.getId());
+                                find.setNextFocusDownId(card.getId());
+                                recognized.setNextFocusDownId(card.getId());
                             }
                         }
+                        fitCards(horizontal, cards);
                         // Earlier rows may complete later. Keep the user's selected card visible.
                         main.post(() -> {
                             View focused = findFocus();
@@ -184,6 +191,24 @@ final class MovieSearchView extends LinearLayout {
                     });
                 }
             });
+        }
+    }
+
+    /** Whole slots at the viewport edge; the next poster starts outside it, not halfway through a tile. */
+    private void fitCards(HorizontalScrollView horizontal, LinearLayout cards) {
+        int width = horizontal.getWidth();
+        if (width <= 0) return;
+        int columns = Math.max(1, width / dp(162));
+        for (int i = 0; i < cards.getChildCount(); i++) {
+            View card = cards.getChildAt(i);
+            LayoutParams lp = (LayoutParams) card.getLayoutParams();
+            int slotStart = Math.round((i % columns) * width / (float) columns);
+            int slotEnd = Math.round((i % columns + 1) * width / (float) columns);
+            int cardWidth = Math.max(1, slotEnd - slotStart - dp(14));
+            if (lp.width != cardWidth) {
+                lp.width = cardWidth;
+                card.setLayoutParams(lp);
+            }
         }
     }
 
@@ -305,7 +330,22 @@ final class MovieSearchView extends LinearLayout {
     private TextView text(String value, int size, int color) {
         TextView text = new TextView(activity);
         text.setText(value); text.setTextSize(size); text.setTextColor(color);
+        text.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
         return text;
+    }
+    private View iconAction(String label, int drawable, Runnable click) {
+        ImageView view = new ImageView(activity);
+        view.setImageResource(drawable);
+        view.setPadding(dp(12), dp(12), dp(12), dp(12));
+        android.content.res.ColorStateList tint = new android.content.res.ColorStateList(
+                new int[][] {new int[] {android.R.attr.state_focused}, new int[0]},
+                new int[] {Color.WHITE, 0xffb1b3b8});
+        view.setImageTintList(tint);
+        view.setContentDescription(label);
+        view.setFocusable(true); view.setClickable(true);
+        focusFrame.track(view, 24);
+        view.setOnClickListener(v -> click.run());
+        return view;
     }
     private TextView action(String label, Runnable click) {
         TextView view = text(label, 16, Color.WHITE);
@@ -316,14 +356,14 @@ final class MovieSearchView extends LinearLayout {
         return view;
     }
     private void decorate(View view) {
-        view.setBackground(background(false));
-        view.setOnFocusChangeListener((v, focused) -> v.setBackground(background(focused)));
+        view.setBackground(background());
+        focusFrame.track(view, 12);
     }
-    private GradientDrawable background(boolean focused) {
+    private GradientDrawable background() {
         GradientDrawable shape = new GradientDrawable();
-        shape.setColor(focused ? 0xff263d58 : 0xff192332);
+        shape.setColor(0xff161c27);
         shape.setCornerRadius(dp(12));
-        shape.setStroke(dp(focused ? 3 : 1), focused ? 0xff8cc7ff : 0xff29374b);
+        shape.setStroke(Math.max(1, dp(.5f)), 0x24ffffff);
         return shape;
     }
     private int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }

@@ -38,13 +38,13 @@ final class WallpaperPlayer {
   if(closed)return;active=true;blocked=false;
   if(current==null){restorePreview();load(advanceFirst);}
   else if(advanceFirst){current.view.animate().cancel();current.view.setAlpha(1f);load(true);}
-  else{current.view.animate().cancel();current.view.setAlpha(1f);current.resumeMotion();schedule();resumeVideo();}
+  else{current.view.animate().cancel();current.view.setAlpha(1f);schedule();resumeVideo();}
  }
  void stop(){
   active=false;handler.removeCallbacks(tick);generation++;loading=false;
   if(pending!=null){pending.release();pending=null;}
   if(current!=null){
-   current.view.animate().cancel();current.view.setAlpha(1f);current.pauseMotion();current.pauseVideo();
+   current.view.animate().cancel();current.view.setAlpha(1f);current.pauseVideo();
    if(current instanceof VideoLayer){Bitmap frame=((VideoLayer)current).snapshot();if(frame!=null){HomeArtwork.remember(context,frame);displayPreview(frame);}current.release();current=null;}
   }
   if(outgoing!=null){outgoing.release();outgoing=null;}
@@ -101,20 +101,14 @@ final class WallpaperPlayer {
   incoming.view.animate().alpha(1).setDuration(outgoing!=null?WallpaperSource.TRANSITION_MS:cached?250:0).setInterpolator(new android.view.animation.LinearInterpolator()).withEndAction(()->{if(current!=incoming)return;if(outgoing!=null){outgoing.release();outgoing=null;}removePreview();}).start();
  }
  private class Layer {
-  android.animation.ValueAnimator motion;
   final FrameLayout view=new FrameLayout(context);final WallpaperSource.Item item;final Bitmap bitmap;boolean released;
   Layer(WallpaperSource.Item item,Bitmap bitmap){this.item=item;this.bitmap=bitmap;view.setFocusable(false);}
   void ready(Runnable done,Runnable error){
    if(released){error.run();return;}
    ImageView image=new ImageView(context);image.setScaleType(ImageView.ScaleType.CENTER_CROP);image.setImageBitmap(bitmap);view.addView(image,new FrameLayout.LayoutParams(-1,-1));
-   int effect=WallpaperSource.animation(context);
-   if(effect!=0&&android.animation.ValueAnimator.areAnimatorsEnabled()){motion=android.animation.ValueAnimator.ofFloat(0f,1f);motion.setDuration(WallpaperSource.animationSeconds(context)*1000L);motion.setRepeatCount(android.animation.ValueAnimator.INFINITE);motion.setRepeatMode(android.animation.ValueAnimator.REVERSE);motion.setInterpolator(new android.view.animation.LinearInterpolator());
-    motion.addUpdateListener(a->{float t=(Float)a.getAnimatedValue();if(effect==1){image.setScaleX(1.10f);image.setScaleY(1.10f);image.setTranslationX((t*2-1)*view.getWidth()*.045f);}else{float scale=1f+.12f*t;image.setScaleX(scale);image.setScaleY(scale);}});motion.start();}
    done.run();
   }
-  void release(){if(released)return;released=true;if(motion!=null){motion.cancel();motion=null;}view.animate().cancel();background.removeView(view);if(bitmap!=null&&!bitmap.isRecycled())bitmap.recycle();}
-  void pauseMotion(){if(motion!=null)motion.pause();}
-  void resumeMotion(){if(motion!=null&&motion.isPaused())motion.resume();}
+  void release(){if(released)return;released=true;view.animate().cancel();background.removeView(view);if(bitmap!=null&&!bitmap.isRecycled())bitmap.recycle();}
   void pauseVideo(){}
   void resumeVideo(){}
  }

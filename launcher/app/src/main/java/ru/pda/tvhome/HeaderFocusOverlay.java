@@ -18,6 +18,7 @@ final class HeaderFocusOverlay extends View {
     private View anchor;
     private FrameLayout anchorRoot;
     private boolean anchorAnimated,anchorTileShape,forcePlacement;
+    private float anchorRadiusDp = -1;
     private final Matrix targetMatrix=new Matrix();
     private final RectF targetRect=new RectF();
     private final float[] goal=new float[5],lastGoal=new float[5];
@@ -45,7 +46,13 @@ final class HeaderFocusOverlay extends View {
     }
     void pointAt(View target, FrameLayout root, boolean animate) { pointAt(target, root, animate, false); }
     void pointAt(View target, FrameLayout root, boolean animate, boolean tileShape) {
+        anchorRadiusDp = -1;
         anchor=target;anchorRoot=root;anchorAnimated=animate;anchorTileShape=tileShape;forcePlacement=true;
+        setVisibility(VISIBLE);alignAnchor();
+    }
+    void pointAtRounded(View target, FrameLayout root, boolean animate, float radiusDp) {
+        anchorRadiusDp=radiusDp;
+        anchor=target;anchorRoot=root;anchorAnimated=animate;forcePlacement=true;
         setVisibility(VISIBLE);alignAnchor();
     }
     private void alignAnchor(){
@@ -64,7 +71,8 @@ final class HeaderFocusOverlay extends View {
         float scale=Math.min(targetRect.width()/anchor.getWidth(),targetRect.height()/anchor.getHeight());
         goal[0]=targetRect.left-pad;goal[1]=targetRect.top-pad;
         goal[2]=targetRect.width()+pad*2;goal[3]=targetRect.height()+pad*2;
-        goal[4]=anchorTileShape?AppAdapter.cornerRadius(anchor.getWidth(),density)*scale+pad:targetRect.height()/2+pad;
+        goal[4]=anchorRadiusDp>=0?anchorRadiusDp*density*scale+pad:
+                anchorTileShape?AppAdapter.cornerRadius(anchor.getWidth(),density)*scale+pad:targetRect.height()/2+pad;
         boolean changed=!placed;
         for(int i=0;i<springs.length;i++){
             if(!placed||forcePlacement||Math.abs(lastGoal[i]-goal[i])>.05f){
