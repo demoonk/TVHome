@@ -29,11 +29,35 @@
 - APK `TVHome-2.0.3.apk` из [последнего релиза](https://github.com/demoonk/TVHome/releases/latest).
 - Android SDK Platform-Tools: https://developer.android.com/tools/releases/platform-tools
 
-Распакуйте Platform-Tools. Положите APK в папку с `adb.exe`. Откройте эту папку в Проводнике, в адресной строке введите `powershell` и нажмите Enter. Все команды ниже выполняются в этом окне.
+Для автоматической установки перейдите к пункту 2: APK и Platform-Tools установщик скачает сам. Для ручной установки распакуйте Platform-Tools. Положите APK в папку с `adb.exe`. Откройте эту папку в Проводнике, в адресной строке введите `powershell` и нажмите Enter. Все команды ниже выполняются в этом окне.
 
 В примерах `IP:PORT` — адрес и порт подключения вашего телевизора. Заменяйте их во всех командах, например на `192.168.1.50:5555`. Порт 5555 используйте только если он соответствует настройкам вашего ТВ.
 
-### 2. Подключение к телевизору
+### 2. Автоматический установщик — одна команда PowerShell
+
+**Откройте PowerShell на компьютере Windows, вставьте команду целиком и нажмите Enter:**
+
+```powershell
+$ErrorActionPreference = 'Stop'; $installer = Join-Path $env:TEMP 'Setup-TVHome.ps1'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing 'https://github.com/demoonk/TVHome/releases/latest/download/Setup-TVHome.ps1' -OutFile $installer; powershell -NoProfile -ExecutionPolicy Bypass -File $installer
+```
+
+Заранее скачивать APK и ADB не нужно. Установщик сам скачает официальный Android SDK Platform-Tools с сайта Google и последний APK TVHome из GitHub Releases, проверит SHA-256 приложения и:
+
+1. Объяснит, как включить режим разработчика и отладку на ТВ.
+2. Запросит IP и порт подключения телевизора. Если указан только IP, использует порт 5555; для вашей прошивки может требоваться другой порт.
+3. При необходимости выполнит сопряжение беспроводной отладки: запросит отдельный порт сопряжения, затем ADB попросит код с экрана ТВ. Попросит подтвердить разрешение отладки на телевизоре.
+4. Проверит Android 8.0+, сохранит прежний Home и настройки помощника в `previous-settings.json`, сделает доступную резервную копию установленного APK и установит TVHome с сохранением данных.
+5. Выдаст и проверит разрешения для часов (`SYSTEM_ALERT_WINDOW`, `GET_USAGE_STATS`), микрофона (`RECORD_AUDIO`) и переключения помощника (`WRITE_SECURE_SETTINGS`). Назначит и проверит TVHome как главный экран.
+6. Если Google-компоненты есть, запустит и проверит ADB-помощник для переключения голосового режима. Если их нет, сообщит, что голосовой режим недоступен; отсутствующие Google-компоненты установщик не устанавливает.
+7. Откроет TVHome и покажет завершающие действия на телевизоре: включить оверлейные часы при необходимости; удержать OK на значке микрофона, выбрать «Google от лаунчера» и источник «Пульт» или «ТВ». Выбор этого голосового режима может отключить системного Google-помощника Katniss; возврат — выбор «Системный» в том же меню.
+
+Источник «ТВ» требует Android 13+ и доступного встроенного микрофона. ADB-помощник работает до перезагрузки; для повторного переключения помощника после перезагрузки его нужно запустить снова (ручная команда есть ниже, либо повторно запустите установщик). Уже выбранный режим не обязательно перестаёт работать после перезагрузки.
+
+Файлы, резервная копия APK и прежние настройки сохраняются в `%LOCALAPPDATA%\TVHome\Installer\<папка установки>`. При ошибке установщик останавливается и показывает её текст; выполненные шаги автоматически не откатываются. Резервная копия APK не содержит данные приложения. Проверьте Home и голос с пульта, затем при желании отключите отладку. Штатный лаунчер остаётся включённым.
+
+[Скачать установщик отдельно](https://github.com/demoonk/TVHome/releases/latest/download/Setup-TVHome.ps1) · [Посмотреть исходный код](Setup-TVHome.ps1). Ручные способы установки и настройки сохранены далее.
+
+### 3. Подключение к телевизору
 
 1. Включите режим разработчика на ТВ: обычно для этого нужно несколько раз нажать на пункт «Сборка» в сведениях об устройстве.
 2. Включите доступную на вашей прошивке отладку по сети / ADB. Названия пунктов отличаются.
@@ -55,7 +79,7 @@
 
 Введите код с экрана ТВ, затем выполните `connect` с **портом подключения**. Порт сопряжения и порт подключения могут отличаться.
 
-### 3. Установка или обновление
+### 4. Установка или обновление
 
 ```powershell
 .\adb.exe -s IP:PORT install -r .\TVHome-2.0.3.apk
@@ -69,9 +93,9 @@
 
 Обновление ставится поверх совместимой версии с сохранением данных. При ошибке установки остановитесь и сохраните её текст. Для обновления не нужно удалять приложение или очищать его данные.
 
-Если Home и голосовой поиск уже настроены, после успешного обновления дополнительные действия из разделов 4 и 5 не нужны.
+Если Home и голосовой поиск уже настроены, после успешного обновления дополнительные действия из разделов 5 и 6 не нужны.
 
-### 4. Как назначить TVHome на кнопку Home
+### 5. Как назначить TVHome на кнопку Home
 
 Если в меню телевизора нет выбора главного экрана, назначьте его с компьютера через ADB.
 
@@ -93,9 +117,9 @@
 
 Если команда завершается ошибкой или Home всё равно открывает штатный экран, способ зависит от прошивки и обработки кнопок пульта. Для разбора нужны модель ТВ, версия Android и текст ответа команды. Отключать штатный лаунчер для выполнения этой инструкции не требуется.
 
-Установщики `install.ps1` и `install.sh` из релиза 2.0.3 сами Home не назначают.
+Новый интерактивный установщик `Setup-TVHome.ps1` из пункта 2 назначает Home автоматически. Установщики `install.ps1` и `install.sh` из релиза 2.0.3 сами Home не назначают.
 
-### 5. Как настроить голосовой поиск
+### 6. Как настроить голосовой поиск
 
 #### Что означает «Недоступно на этом телевизоре»
 
@@ -146,7 +170,7 @@ ADB-помощник работает до перезагрузки телеви
 
 `Install-RemoteBridge.ps1` тоже запускает ADB-помощник, но сначала проверяет конкретный совместимый пульт TVC0GWBT. Для настройки только голоса выше приведён отдельный запуск без установки мостика кнопок.
 
-### 6. Решение проблем
+### 7. Решение проблем
 
 | Проблема | Что сделать |
 | --- | --- |
@@ -155,7 +179,7 @@ ADB-помощник работает до перезагрузки телеви
 | `offline` или не удаётся подключиться | Проверьте общую сеть, IP, порт и включённую отладку. Для беспроводной отладки различайте порты сопряжения и подключения. |
 | APK не устанавливается | Сохраните полный текст ошибки. Не удаляйте установленную версию ради повторной попытки: это может привести к потере данных. |
 | Home открывает штатный экран | Повторно проверьте ответ `set-home-activity`. Если команда успешна, но кнопка ведёт иначе, сообщите модель ТВ и версию Android: прошивка может обрабатывать Home отдельно. |
-| Значок микрофона пишет «Недоступно на этом телевизоре» | Проверьте выбранного помощника удержанием значка. Для режима TVHome выполните подготовку из раздела 5. |
+| Значок микрофона пишет «Недоступно на этом телевизоре» | Проверьте выбранного помощника удержанием значка. Для режима TVHome выполните подготовку из раздела 6. |
 | «Не удалось переключить помощника. Проверьте запуск ADB-помощника управления Katniss» | Проверьте выдачу `WRITE_SECURE_SETTINGS` и повторите запуск `assistant-package-guard.sh`. После перезагрузки его нужно запускать заново. |
 | Переключатель всё равно не работает | Сохраните вывод `pm path` для обоих Google-пакетов и содержимое лога командой ниже. |
 | Распознавание речи недоступно | Проверьте наличие и состояние Google-компонентов, подключение к интернету и работу штатного голосового ввода с пульта. Наличие одного APK TVHome недостаточно. |
@@ -170,11 +194,11 @@ ADB-помощник работает до перезагрузки телеви
 
 Для обращения за помощью приложите модель ТВ/приставки, версию Android, версию TVHome, выбранный источник микрофона, точный текст ошибки и укажите, работает ли голос с физической кнопки пульта.
 
-### 7. Как вернуть прежние настройки
+### 8. Как вернуть прежние настройки
 
 Чтобы вернуть голосового помощника, пока ADB-помощник запущен, удерживайте значок микрофона и переключите «Google от лаунчера» на «Системный». Дождитесь успешного переключения и проверьте штатный голосовой поиск. Если переключение не прошло, сохраните ошибку — возврат нельзя считать завершённым.
 
-Чтобы вернуть прежний главный экран, используйте сохранённый в разделе 4 компонент:
+Чтобы вернуть прежний главный экран, используйте сохранённый в разделе 5 компонент:
 
 ```powershell
 .\adb.exe -s IP:PORT shell cmd package set-home-activity ПАКЕТ/КЛАСС_ПРЕЖНЕГО_ЛАУНЧЕРА
@@ -249,13 +273,13 @@ sh ./install.sh "IP:PORT" "./TVHome-2.0.3.apk" "./platform-tools/adb"
 
 Enable the overlay clock in TVHome settings. Grant display-over-other-apps (`SYSTEM_ALERT_WINDOW`) and usage access (`GET_USAGE_STATS`) in system settings or use the ADB commands above. Both `appops get` checks must report `allow`. Usage access identifies the foreground app so the clock hides on TVHome's Home screen. Open another app to check the clock. Firmware may reset permissions after reinstallation or a permission reset; the same commands restore them without reinstalling.
 
-The release installers `install.ps1` and `install.sh` now grant and verify both permissions after every successful APK installation, preserving app data. They stop on installation or permission errors. Home, accessibility, microphone and voice-assistant setup remain separate.
+The release installers `install.ps1` and `install.sh` now grant and verify both permissions after every successful APK installation, preserving app data. They stop on installation or permission errors. For automatic Home assignment and voice permissions, use the interactive Windows installer `Setup-TVHome.ps1` in step 2. Select the microphone source on the TV afterwards.
 
 ## Installation, updates and rollback — English
 
 TVHome requires **Android TV / Google TV running Android 8.0 or newer (API 26)**. Its application ID is **`ru.pda.tvhome`**. Home selection and remote-button support depend on the TV firmware. **Keep the stock launcher enabled** so you can switch back safely.
 
-The APK contains everything needed for the basic launcher installation. External apps (Yandex Browser, NUM and other providers) must be installed separately. Floating clocks require permission to display over other apps; microphone input requires audio recording permission. The installers do not grant these permissions or configure the system voice assistant; the complete voice setup on a fresh TV is not automated.
+The APK contains everything needed for the basic launcher installation. External apps (Yandex Browser, NUM and other providers) must be installed separately. Floating clocks require permission to display over other apps; microphone input requires audio recording permission. The interactive Windows installer `Setup-TVHome.ps1` in step 2 downloads ADB and the latest APK, assigns Home and grants clock and voice permissions. It starts the assistant helper when Google components are present; choose the voice mode and microphone source on the TV afterwards. The older `install.ps1` and `install.sh` only install the APK and grant clock permissions.
 
 ### Download and install
 
