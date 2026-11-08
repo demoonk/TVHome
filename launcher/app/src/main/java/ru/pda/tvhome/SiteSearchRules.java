@@ -14,5 +14,21 @@ final class SiteSearchRules {
             return false;
         }catch(Exception invalid){return false;}
     }
+    /** The address the installed app can open. Result pages are not always on the app-link host. */
+    static String appLink(String id,String address){
+        try{
+            URI u=new URI(address);
+            if(!content(id,address))return address;
+            String host=u.getHost(),path=u.getPath();
+            if("kinopoisk".equals(id)){
+                // Кинопоиск registers app links only for hd.kinopoisk.ru/film; its own scheme covers series.
+                if(path.startsWith("/film/"))host="hd.kinopoisk.ru";
+                else return new URI("kpatv",null,"seasons",-1,"/"+path.substring("/series/".length()).replaceAll("/+$",""),null,null).toString();
+            }
+            // VK Video registers app links on vk.com, not on the vkvideo.ru result host.
+            if("vk".equals(id)&&!host.equals("vk.com"))host="vk.com";
+            return new URI("https",null,host,-1,path,u.getQuery(),null).toString();
+        }catch(Exception invalid){return address;}
+    }
     private SiteSearchRules(){}
 }

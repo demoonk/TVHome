@@ -17,6 +17,19 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.PathPermission;
 
 final class MediaSearch {
+    /**
+     * Exported in-app search activity, or null. The verified handlers on the living-room TV match
+     * ACTION_SEARCH without CATEGORY_DEFAULT, so an implicit ACTION_SEARCH intent does not resolve
+     * from this app; the component has to be used explicitly.
+     */
+    static String searchActivity(Context context, String pkg) {
+        for (ResolveInfo candidate : context.getPackageManager().queryIntentActivities(
+                new Intent(Intent.ACTION_SEARCH).setPackage(pkg), 0)) {
+            if (candidate.activityInfo.exported) return candidate.activityInfo.name;
+        }
+        return null;
+    }
+
     static SearchableInfo searchable(Context context, String pkg) {
         SearchManager manager = context.getSystemService(SearchManager.class);
         for (ResolveInfo candidate : context.getPackageManager().queryIntentActivities(
@@ -60,18 +73,10 @@ final class MediaSearch {
             try {
                 if (context.getPackageManager().getLeanbackLaunchIntentForPackage(app.pkg) == null
                         && context.getPackageManager().getLaunchIntentForPackage(app.pkg) == null) continue;
-                if (SiteSearch.supports(app) || "deeplink".equals(app.mode)) { found.put(app.pkg, app); continue; }
-                SearchableInfo info = searchable(context, app.pkg);
-                if ("num".equals(app.id) && readable(context, "ru.yourok.num.atvsearch", "/search/search_suggest_query")) {
+                // Rows are for apps that can show cards or have a reachable in-app search entry.
+                if (SiteSearch.supports(app) || "deeplink".equals(app.mode) || "reshala".equals(app.mode)
+                    || AppSearchEntry.base(app.id) != null || searchActivity(context, app.pkg) != null) {
                     found.put(app.pkg, app);
-                } else if (info != null) {
-                    String path = (info.getSuggestPath() == null ? "" : "/" + info.getSuggestPath())
-                            + "/" + SearchManager.SUGGEST_URI_PATH_QUERY;
-                    // SmartTube's public search URL is usable even if its suggestions are protected.
-                    if ("youtube".equals(app.mode) || readable(context, info.getSuggestAuthority(), path)) {
-                        found.put(app.pkg, "youtube".equals(app.mode) ? app
-                                : new MediaVoiceApps.App(app.id, app.label, app.pkg, "provider", app.aliases));
-                    }
                 }
             } catch (RuntimeException unavailable) { /* Package replaced or provider unavailable. */ }
         }

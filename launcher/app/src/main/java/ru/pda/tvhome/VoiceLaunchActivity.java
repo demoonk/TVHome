@@ -17,6 +17,7 @@ public final class VoiceLaunchActivity extends Activity {
     private android.app.AlertDialog activeDialog;
     private int speechRequestCode = 6000;
     private boolean awaitingSpeech;
+    private int speechRetries;
     private TvMicrophoneInput tvMicrophone;
     private String activeQuery;
     private String activeTarget;
@@ -64,7 +65,14 @@ public final class VoiceLaunchActivity extends Activity {
                         .setOnCancelListener(d->finish()).show();
                 return;
             }
-            awaitingSpeech = true;
+            listen();
+        } catch (RuntimeException 
+unavailable) { fail("Распознавание речи недоступно"); }
+    }
+
+    private void listen() {
+        awaitingSpeech = true;
+        try {
             startActivityForResult(new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
                     .setPackage("com.google.android.tts")
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -92,9 +100,14 @@ public final class VoiceLaunchActivity extends Activity {
         // A previous speech window can report cancellation after another command replaced it.
         if (request != speechRequestCode || !awaitingSpeech) return;
         awaitingSpeech = false;
-        if (result != RESULT_OK || data == null) { finish(); return; }
-        ArrayList<String> words = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-        if (words == null || words.isEmpty()) { fail("Речь не распознана"); return; }
+        ArrayList<String> words = data == null ? null : data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+        if (result != RESULT_OK || words == null || words.isEmpty()) {
+            Toast.makeText(this, "Речь не распознана. Повторите запрос", Toast.LENGTH_LONG).show();
+            // Окно остаётся: движок уже живой, повтор не платит за холодный старт. Одна попытка, не цикл.
+            if (speechRetries < 1) { speechRetries = 1; listen(); } else finish();
+            return;
+        }
+        speechRetries = 0;
         route(words);
     }
 
@@ -234,24 +247,21 @@ public final class VoiceLaunchActivity extends Activity {
     private void searchInApp(String query, String target) {
         MediaVoiceApps.App app = MediaVoiceApps.byId(target);
         if (app == null) return;
-        if(SiteSearch.supports(app)){SiteSearch.open(this,app,query);return;}
-        android.net.Uri uri;
-        if ("deeplink".equals(app.mode)) {
-            uri = android.net.Uri.parse("vk".equals(app.id)
-                    ? "vkvideo://vk.com/search" : "rutube://rutube.ru/search")
-                    .buildUpon().appendQueryParameter("query", query).build();
-        } else if ("youtube".equals(app.mode)) {
-            uri = android.net.Uri.parse("https://www.youtube.com/results")
-                    .buildUpon().appendQueryParameter("search_query", query).build();
-        } else {
-            manualSearch(app, query);
-            return;
+        String entry = AppSearchEntry.searchUrl(app.id, query);
+        if (entry != null) {
+            try {
+                SearchNavigation.open(this, new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(entry)).setPackage(app.pkg));
+                return;
+            } catch (RuntimeException unavailable) { /* fall through to the site search page */ }
         }
+        if (SiteSearch.supports(app)) { SiteSearch.open(this, app, query); return; }
+        String activity = MediaSearch.searchActivity(this, app.pkg);
+        if (activity == null) { manualSearch(app, query); return; }
         try {
-            SearchNavigation.open(this, new Intent(Intent.ACTION_VIEW, uri).setPackage(app.pkg));
-        } catch (RuntimeException unavailable) {
-            Toast.makeText(this, "Поиск " + app.label + " недоступен", Toast.LENGTH_LONG).show();
-        }
+            SearchNavigation.open(this, new Intent(Intent.ACTION_SEARCH)
+                    .setClassName(app.pkg, activity)
+                    .putExtra(android.app.SearchManager.QUERY, query));
+        } catch (RuntimeException unavailable) { manualSearch(app, query); }
     }
 
     private void manualSearch(MediaVoiceApps.App app, String query) {
@@ -259,10 +269,7 @@ public final class VoiceLaunchActivity extends Activity {
                 .setMessage("Здесь запрос нужно ввести вручную. Открыть приложение?")
                 .setPositiveButton("Открыть", (dialog, which) -> {
                     try {
-                        Intent intent = "reshala".equals(app.mode)
-                                ? new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("reshala://open")
-                                        .buildUpon().appendQueryParameter("screen", "search").build()).setPackage(app.pkg)
-                                : getPackageManager().getLeanbackLaunchIntentForPackage(app.pkg);
+                        Intent intent = getPackageManager().getLeanbackLaunchIntentForPackage(app.pkg);
                         if (intent == null) intent = getPackageManager().getLaunchIntentForPackage(app.pkg);
                         if (intent == null) { fail("Приложение не установлено"); return; }
                         SearchNavigation.open(this, intent);
@@ -273,14 +280,17 @@ public final class VoiceLaunchActivity extends Activity {
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (intent.getBooleanExtra(SearchReturn.EXTRA, false) && movieSearch != null) { SearchReturn.clear(this); return; }
-        if (awaitingSpeech && intent.getStringExtra("command") == null) return;
+        // Повторное обращение во время прослушивания — новая попытка, а не игнорируемый дубль.
+        boolean retry = awaitingSpeech;
         setIntent(intent);
+        speechRetries = 0;
         timeout.removeCallbacksAndMessages(null);
         if (movieSearch != null) { movieSearch.close(); movieSearch = null; }
         if(tvMicrophone!=null){tvMicrophone.close();tvMicrophone=null;}
         awaitingSpeech = false;
         activeQuery = activeTarget = null;
         if (activeDialog != null) { activeDialog.dismiss(); activeDialog = null; }
+        if (retry && intent.getStringExtra("command") == null) { listen(); return; }
         acceptIntent(intent);
     }
 

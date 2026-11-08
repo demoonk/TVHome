@@ -17,7 +17,7 @@ final class MediaVoiceApps {
         new App("kion", "КИОН / МТС ТВ", "ru.mts.mtstv", "provider", "кион", "кионе", "kion", "мтс", "мтств", "mtstv"),
         new App("vk", "VK Видео", "com.vk.tv", "deeplink", "вк", "вквидео", "вконтакте", "vk", "vkvideo"),
         new App("rutube", "Rutube", "ru.rutube.app", "deeplink", "рутуб", "рутубе", "рутюб", "рутюбе", "rutube"),
-        new App("reshala", "Решала", "reshala.tv.app", "reshala", "решала", "решале", "решалу", "reshala", "резка", "резке", "hdrezka"),
+        new App("reshala", "РешалаТВ", "reshala.tv.app", "reshala", "решала", "решале", "решалу", "решалатв", "решалетв", "решалутв", "reshala", "reshalatv", "резка", "резке", "hdrezka"),
         new App("lift", "Lift", "io.lift.app", "manual", "лифт", "лифте", "lift"),
         new App("vimu", "Vimu", "net.gtvbox.videoplayer", "provider", "виму", "vimu", "плеер"),
         new App("mpv", "mpv", "is.xyz.mpv", "manual", "мпв", "эмпиви", "mpv"),

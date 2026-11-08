@@ -7,7 +7,9 @@ if [ -f "$pid_file" ]; then
     case "$previous_pid" in
         *[!0-9]*|'') ;;
         *)
-            previous_command=$(tr '\000' ' ' < "/proc/$previous_pid/cmdline" 2>/dev/null)
+            # cat, not a redirection: a redirection error is printed before 2>/dev/null applies,
+            # and a dead pid put that error into the guard's log.
+            previous_command=$(cat "/proc/$previous_pid/cmdline" 2>/dev/null | tr '\000' ' ')
             case "$previous_command" in
                 *"sh /data/local/tmp/assistant-package-guard.sh"*) exit 0 ;;
             esac
@@ -30,7 +32,10 @@ while pm path ru.pda.tvhome >/dev/null 2>&1; do
             launcher)
                 selected=$(settings get secure voice_interaction_service)
                 if [ "$selected" = "ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService" ]; then
-                    if pm disable-user --user 0 "$package" >/dev/null 2>&1; then
+                    # A package already frozen answers nothing, so the launcher would wait five seconds
+                    # and give up: already off counts as the same state.
+                    if pm disable-user --user 0 "$package" >/dev/null 2>&1 ||
+                            pm list packages -d | grep -qx "$package"; then
                         # Package removal can clear the selected assistant even when another one was
                         # selected first. Reassert our entry after that package operation completes.
                         settings put secure assistant ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService

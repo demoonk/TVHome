@@ -77,4 +77,12 @@ public class VoiceSearchCommandTest {
         assertNull(VoiceSearchCommand.parse("Найди фильм"));
         assertNull(VoiceSearchCommand.parse("Сериал"));
     }
+    @Test public void reshalaTvNamesSelectDirectSearch() {
+        for (String name : new String[]{"РешалаТВ", "Решала ТВ", "Решале ТВ", "Решале", "Reshala TV"}) {
+            VoiceSearchCommand command = VoiceSearchCommand.parse("Найди Терминатор в " + name);
+            assertNotNull(name, command);
+            assertEquals(name, "reshala", command.target);
+            assertEquals(name, "Терминатор", command.query);
+        }
+    }
 }

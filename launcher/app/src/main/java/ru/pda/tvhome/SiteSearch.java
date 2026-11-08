@@ -59,7 +59,7 @@ final class SiteSearch {
         });}catch(RuntimeException unavailable){done.countDown();}
     }
     static void configure(WebView web){web.getSettings().setJavaScriptEnabled(true);web.getSettings().setDomStorageEnabled(true);web.getSettings().setAllowFileAccess(false);web.getSettings().setAllowContentAccess(false);web.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);}
-    private static MediaSearch.Hit hit(MediaVoiceApps.App app,String title,String poster,String url){return new MediaSearch.Hit(title,app.label,poster,new Intent(Intent.ACTION_VIEW,Uri.parse(url)).setPackage(app.pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
+    private static MediaSearch.Hit hit(MediaVoiceApps.App app,String title,String poster,String url){return new MediaSearch.Hit(title,app.label,poster,new Intent(Intent.ACTION_VIEW,Uri.parse(SiteSearchRules.appLink(app.id,url))).setPackage(app.pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));}
     static void open(Activity a,MediaVoiceApps.App app,String query){a.startActivityForResult(new Intent(a,SiteSearchActivity.class).putExtra("source",app.id).putExtra("query",query),REQUEST);}
     private SiteSearch(){}
 }

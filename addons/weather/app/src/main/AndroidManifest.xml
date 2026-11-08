@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- The only permission: Open-Meteo, for the place search, the weather and the air quality. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application
+        android:allowBackup="false"
+        android:banner="@drawable/banner"
+        android:icon="@drawable/icon"
+        android:label="@string/app_name"
+        android:supportsRtl="false"
+        android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen">
+
+        <activity
+            android:name=".WeatherActivity"
+            android:exported="true"
+            android:screenOrientation="landscape">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+            <!-- Clean Your TV module card (docs/specs/card.md): the tile shows as "Weather" once the owner says Show. -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="ru.pda.tvhome.category.DOCK_CARD" />
+            </intent-filter>
+            <meta-data android:name="ru.pda.tvhome.card" android:resource="@xml/module_card" />
+        </activity>
+
+        <!-- The launcher's top bar reads the last reading here; nothing is fetched for it. Read-only, and the
+             numbers are the place chosen on the page. -->
+        <provider
+            android:name=".WeatherProvider"
+            android:authorities="io.github.sumyabazar1.weather.snapshot"
+            android:exported="true" />
+
+        <!-- One fetch when the top bar's numbers are stale (action in RefreshReceiver), not a background poll. -->
+        <receiver
+            android:name=".RefreshReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.github.sumyabazar1.weather.action.REFRESH" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

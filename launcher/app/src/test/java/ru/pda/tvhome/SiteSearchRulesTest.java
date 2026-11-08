@@ -20,4 +20,20 @@ public final class SiteSearchRulesTest {
         assertFalse(SiteSearchRules.content("rutube","http://rutube.ru/video/1b5db47d7a3c6157d9114a1e92b1925a/"));
         assertFalse(SiteSearchRules.content("unknown","https://www.kinopoisk.ru/film/301/"));
     }
+    @Test public void mapsResultLinksToTheHostsTheInstalledAppsDeclare(){
+        assertEquals("https://hd.kinopoisk.ru/film/301/",SiteSearchRules.appLink("kinopoisk","https://www.kinopoisk.ru/film/301/"));
+        assertEquals("kpatv://seasons/123",SiteSearchRules.appLink("kinopoisk","https://www.kinopoisk.ru/series/123/"));
+        assertEquals("https://vk.com/video-123_456",SiteSearchRules.appLink("vk","https://vkvideo.ru/video-123_456"));
+        assertEquals("https://vk.com/video123_456?list=test",SiteSearchRules.appLink("vk","https://vk.com/video123_456?list=test"));
+        assertEquals("https://rutube.ru/video/1b5db47d7a3c6157d9114a1e92b1925a/",
+                SiteSearchRules.appLink("rutube","https://rutube.ru/video/1b5db47d7a3c6157d9114a1e92b1925a/"));
+        assertEquals("https://www.kinopoisk.ru/film/301/",SiteSearchRules.appLink("unknown","https://www.kinopoisk.ru/film/301/"));
+    }
+    @Test public void keepsOnlyValidContentLinksWhenMapping(){
+        assertEquals("javascript:alert(1)",SiteSearchRules.appLink("kinopoisk","javascript:alert(1)"));
+        assertEquals("https://www.kinopoisk.ru.evil.example/film/301/",
+                SiteSearchRules.appLink("kinopoisk","https://www.kinopoisk.ru.evil.example/film/301/"));
+        assertEquals("http://rutube.ru/video/1b5db47d7a3c6157d9114a1e92b1925a/",
+                SiteSearchRules.appLink("rutube","http://rutube.ru/video/1b5db47d7a3c6157d9114a1e92b1925a/"));
+    }
 }

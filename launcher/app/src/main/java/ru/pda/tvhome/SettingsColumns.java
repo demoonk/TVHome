@@ -15,10 +15,10 @@ final class SettingsColumns {
     private final LinearLayout navigation, list;
     private final TextView title, breadcrumb;
     private final Map<Integer,View> sources=new HashMap<>();
-    /** Раздел «Помощь» — предпоследний; строки его экрана рисует HelpMenu. */
-    private static final int HELP=9;
+    /** Раздел «Заморозка программ» — сразу после видимых программ; раздел «Помощь» — предпоследний. */
+    private static final int FREEZE=2,HELP=10;
     private final String[] names;
-    private final int[][] rows={{R.id.reorderChoice}, {}, {R.id.tileCropChoice,R.id.animationsChoice,R.id.oledShiftChoice,R.id.headerPlateChoice,R.id.plateOpacityChoice,R.id.plateBlurChoice}, {},
+    private final int[][] rows={{R.id.reorderChoice}, {}, {}, {R.id.tileCropChoice,R.id.animationsChoice,R.id.oledShiftChoice,R.id.headerPlateChoice,R.id.plateOpacityChoice,R.id.plateBlurChoice}, {},
         {R.id.dimDelayChoice,R.id.dimRampChoice}, {R.id.clockColorChoice,R.id.clockCornerChoice,R.id.clockSizeChoice,R.id.clockFontChoice,R.id.clockPositionChoice},
         {R.id.assistantChoice,R.id.microphoneChoice}, {R.id.sleepSettingsChoice}, {R.id.weatherCityChoice,R.id.weatherGpsChoice}, {}, {R.id.tvSettingsChoice}};
     private int section;
@@ -37,7 +37,7 @@ final class SettingsColumns {
     private GradientDrawable fill(int color){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(8));return d;}
     private SettingsColumns(Activity a){
         activity=a;density=a.getResources().getDisplayMetrics().density;
-        names=new String[]{"Главный экран","Показывать на экране","Оформление","Обои","Затемнение","Часы поверх приложений","Голосовой помощник","Таймер сна","Погода","Помощь","Система"};
+        names=new String[]{"Главный экран","Показывать на экране","Заморозка программ","Оформление","Обои","Затемнение","Часы поверх приложений","Голосовой помощник","Таймер сна","Погода","Помощь","Система"};
         for(int[] group:rows)for(int id:group)sources.put(id,a.findViewById(id));
         for(int id:new int[]{R.id.columns4,R.id.columns5,R.id.columns6,R.id.columns7,R.id.rows1,R.id.rows2,R.id.rows3})sources.put(id,a.findViewById(id));
         FrameLayout host=a.findViewById(android.R.id.content);ScrollView old=(ScrollView)host.getChildAt(0);
@@ -49,7 +49,7 @@ final class SettingsColumns {
         for(int i=0;i<names.length;i++){
             final int group=i;
             LinearLayout item=new LinearLayout(a);item.setGravity(Gravity.CENTER_VERTICAL);item.setPadding(dp(20),0,dp(14),0);item.setFocusable(true);item.setClickable(true);item.setClipChildren(false);
-            int[] symbols={R.drawable.settings_layout_grid,R.drawable.settings_layout_grid,R.drawable.settings_palette,R.drawable.settings_palette,R.drawable.settings_sun_moon,R.drawable.settings_clock_3,R.drawable.ic_microphone,R.drawable.ic_sleep_moon,R.drawable.settings_cloud_sun,R.drawable.settings_help,R.drawable.ic_settings};
+            int[] symbols={R.drawable.settings_layout_grid,R.drawable.settings_layout_grid,R.drawable.ic_lock,R.drawable.settings_palette,R.drawable.settings_palette,R.drawable.settings_sun_moon,R.drawable.settings_clock_3,R.drawable.ic_microphone,R.drawable.ic_sleep_moon,R.drawable.settings_cloud_sun,R.drawable.settings_help,R.drawable.ic_settings};
             ImageView icon=new ImageView(a);icon.setImageResource(symbols[i]);icon.setPadding(dp(10),dp(10),dp(10),dp(10));android.graphics.drawable.GradientDrawable circle=fill(0xFF1D242C);circle.setShape(android.graphics.drawable.GradientDrawable.OVAL);icon.setBackground(circle);icon.setImageTintList(android.content.res.ColorStateList.valueOf(0xFF9AA0A6));item.addView(icon,new LinearLayout.LayoutParams(dp(40),dp(40)));
             TextView button=text(names[i],14,0xFFE8EAED);LinearLayout.LayoutParams textParams=new LinearLayout.LayoutParams(0,-2,1);textParams.leftMargin=dp(12);item.addView(button,textParams);
             item.setOnClickListener(v->{if(group==names.length-1){sources.get(R.id.tvSettingsChoice).performClick();return;}returnRow=0;showGroup(group,true);});
@@ -68,7 +68,7 @@ final class SettingsColumns {
         heading.setBackgroundColor(0xFF12161B);heading.setElevation(dp(24));heading.setOutlineProvider(null);
         breadcrumb.setBackgroundColor(0xFF12161B);breadcrumb.setElevation(dp(24));breadcrumb.setOutlineProvider(null);
         list=new LinearLayout(a);list.setOrientation(LinearLayout.VERTICAL);list.setClipChildren(false);list.setClipToPadding(false);ScrollView scroller=new ScrollView(a);scroller.setPadding(dp(10),0,dp(10),dp(14));scroller.setClipChildren(true);scroller.setClipToPadding(false);scroller.setVerticalScrollBarEnabled(false);scroller.addView(list);pane.addView(scroller,new LinearLayout.LayoutParams(-1,0,1));root.addView(pane,new LinearLayout.LayoutParams(0,-1,.4145833f));host.addView(root);
-        String requested=a.getIntent().getStringExtra("section");int initial="voice".equals(requested)?6:"sleep".equals(requested)?7:0;
+        String requested=a.getIntent().getStringExtra("section");int initial="voice".equals(requested)?7:"sleep".equals(requested)?8:0;
         showGroup(initial,false);categoryButtons.get(initial).requestFocus();ready=true;
         if("voice".equals(requested)||"sleep".equals(requested))showGroup(initial,true);
     }
@@ -86,7 +86,11 @@ final class SettingsColumns {
             list.addView(row("Приложений в ряду",String.valueOf(columns),true,()->choose("Приложений в ряду",new String[]{"4","5","6","7"},columns-4,index->{sources.get(new int[]{R.id.columns4,R.id.columns5,R.id.columns6,R.id.columns7}[index]).performClick();}),null,null));
             list.addView(row("Рядов приложений",String.valueOf(count),true,()->choose("Рядов приложений",new String[]{"1","2","3"},count-1,index->{sources.get(new int[]{R.id.rows1,R.id.rows2,R.id.rows3}[index]).performClick();}),null,null));
         }
-        if(group==3){
+        if(group==FREEZE){
+            list.addView(row("Приложение не может отключить чужие пакеты: нужны привилегированные права или root. Список показывает то, что безопасно замораживать, и применяется через adb: pm disable-user --user 0 <пакет>.",null,false,()->{},null,null));
+            for(FreezableApps.Item item:FreezableApps.list())list.addView(row(item.pkg(),item.what(),true,()->command(item.pkg()),null,null));
+        }
+        if(group==4){
             list.addView(row("Источник",WallpaperSource.MODES[WallpaperSource.modeIndex(activity)],true,()->choose("Источник обоев",WallpaperSource.MODES,WallpaperSource.modeIndex(activity),i->{if(i==3)WallpaperSource.setMode(activity,"builtin");else if(i==4){if(ProjectivyClient.discover(activity)==null)Toast.makeText(activity,"Aerial Views с поддержкой Projectivy не найден",Toast.LENGTH_LONG).show();else WallpaperSource.setMode(activity,"provider");}else WallpaperSource.setMode(activity,new String[]{"none","file","folder"}[i]);}),null,null));
             String mode=WallpaperSource.mode(activity);
             if(mode.equals("file"))list.addView(row("Выбрать файл",WallpaperSource.name(activity,WallpaperSource.FILE),true,()->((LauncherSettingsActivity)activity).pickBackgroundFile(),null,null));
@@ -113,7 +117,7 @@ final class SettingsColumns {
             ((android.view.ViewGroup) transition).getChildAt(1).setVisibility(View.INVISIBLE);
             list.addView(transition);
         }
-        if(group==2){
+        if(group==3){
             android.content.SharedPreferences prefs=activity.getSharedPreferences(Config.SETTINGS_NAME,0);
             boolean glow=prefs.getBoolean("tile_glow",activity.getResources().getBoolean(R.bool.ambient_glow));
             list.addView(row("Подсветка плиток",glow?"Включена":"Выключена",true,()->{
@@ -147,8 +151,8 @@ final class SettingsColumns {
         if(group==HELP)HelpMenu.install(activity,list,density,()->categoryButtons.get(HELP).requestFocus());
         for(int id:rows[group]){
             View original=sources.get(id);if(!(original instanceof TextView))continue;
-            if(group==5&&id!=R.id.clockColorChoice&&!activity.getSharedPreferences(Config.SETTINGS_NAME,0).getBoolean(Config.CLOCK_ON_KEY,false))continue;
-            if(group==2&&(id==R.id.plateOpacityChoice||id==R.id.plateBlurChoice)&&!activity.getSharedPreferences(Config.SETTINGS_NAME,0).getBoolean(Config.HEADER_PLATE_KEY,activity.getResources().getBoolean(R.bool.header_plate)))continue;
+            if(group==6&&id!=R.id.clockColorChoice&&!activity.getSharedPreferences(Config.SETTINGS_NAME,0).getBoolean(Config.CLOCK_ON_KEY,false))continue;
+            if(group==3&&(id==R.id.plateOpacityChoice||id==R.id.plateBlurChoice)&&!activity.getSharedPreferences(Config.SETTINGS_NAME,0).getBoolean(Config.HEADER_PLATE_KEY,activity.getResources().getBoolean(R.bool.header_plate)))continue;
             if(id==R.id.reorderChoice&&original.getVisibility()==View.GONE)continue;
             String full=((TextView)original).getText().toString();int colon=full.indexOf(':');String label=colon<0?full:full.substring(0,colon),value=colon<0?"":full.substring(colon+1).trim();
             boolean binary=id==R.id.animationsChoice||id==R.id.oledShiftChoice||id==R.id.headerPlateChoice||id==R.id.clockColorChoice||id==R.id.assistantChoice||id==R.id.microphoneChoice;
@@ -158,6 +162,10 @@ final class SettingsColumns {
         if(focus){if(returnRow<list.getChildCount()&&list.getChildAt(returnRow).isFocusable())list.getChildAt(returnRow).requestFocus();else focusFirst();}rendering=false;if(changed)enter(false);
     }
     private void focusFirst(){for(int i=0;i<list.getChildCount();i++)if(list.getChildAt(i).isFocusable()){list.getChildAt(i).requestFocus();break;}}
+    /** Справочный раздел: приложение не отключает пакеты, строка показывает команду adb. */
+    private void command(String pkg){
+        Toast.makeText(activity,"pm disable-user --user 0 "+pkg,Toast.LENGTH_LONG).show();
+    }
     private void choose(String heading,String[] labels,int current,IntConsumer selected){final int origin=returnRow;final int choice=++choiceGeneration;rendering=true;choicesOpen=true;title.setText(heading);breadcrumb.setText("Настройки лаунчера · "+names[section]);list.removeAllViews();for(int i=0;i<labels.length;i++){final int index=i;list.addView(row(labels[i],null,true,()->{returnRow=origin;selected.accept(index);if(choice==choiceGeneration)showGroup(section,true);},null,i==current));}if(current>=0&&current<list.getChildCount())list.getChildAt(current).requestFocus();else focusFirst();rendering=false;enter(false);}
     static boolean showChoices(Activity a,String title,String[] labels,int selected,IntConsumer callback){Object tag=((View)a.findViewById(android.R.id.content)).getTag();if(!(tag instanceof SettingsColumns))return false;((SettingsColumns)tag).choose(title,labels,selected,callback);return true;}
     static void refresh(Activity a){Object tag=((View)a.findViewById(android.R.id.content)).getTag();if(tag instanceof SettingsColumns){SettingsColumns ui=(SettingsColumns)tag;if(!ui.choicesOpen&&!ui.rendering){boolean focused=ui.list.hasFocus();if(focused){for(int i=0;i<ui.list.getChildCount();i++)if(ui.list.getChildAt(i).hasFocus()){ui.returnRow=i;break;}}ui.showGroup(ui.section,focused);}}}

@@ -40,6 +40,7 @@ final class MovieSearchView extends LinearLayout {
     };
     private volatile boolean closed;
     private android.widget.EditText queryInput;
+    private final Consumer<MediaVoiceApps.App> openSearch;
     private final SearchFocusFrame focusFrame;
 
     String queryText() { return queryInput.getText().toString(); }
@@ -48,6 +49,7 @@ final class MovieSearchView extends LinearLayout {
                     Consumer<MediaVoiceApps.App> openSearch, Consumer<String> submitQuery) {
         super(activity);
         this.activity = activity;
+        this.openSearch = openSearch;
         setOrientation(VERTICAL);
         setBackgroundColor(Color.rgb(12, 17, 27));
         setPadding(dp(36), dp(24), dp(28), dp(12));
@@ -140,8 +142,7 @@ final class MovieSearchView extends LinearLayout {
             if (!MediaSearch.canReadResults(activity, app)) {
                 loading.setVisibility(View.GONE);
                 status.setText("Результаты доступны внутри приложения");
-                cards.addView(action("Искать в " + app.label, () -> openSearch.accept(app)),
-                        new LayoutParams(dp(270), dp(64)));
+                addEntry(app, cards);
                 continue;
             }
             CancellationSignal signal = new CancellationSignal();
@@ -151,6 +152,7 @@ final class MovieSearchView extends LinearLayout {
                 signal.cancel();
                 loading.setVisibility(View.GONE);
                 status.setText("Поиск не ответил. Повторите запрос позже");
+                addEntry(app, cards);
             };
             // Bound queued rows too: a provider that ignores cancellation cannot leave them loading forever.
             main.postDelayed(expired, 18000);
@@ -163,6 +165,7 @@ final class MovieSearchView extends LinearLayout {
                         if (closed || signal.isCanceled()) return;
                         loading.setVisibility(View.GONE);
                         status.setText(hits.isEmpty() ? "Ничего не найдено" : "Найдено: " + hits.size());
+                        if (hits.isEmpty()) addEntry(app, cards);
                         for (MediaSearch.Hit hit : hits) {
                             View card = card(hit, app.label);
                             card.setId(View.generateViewId());
@@ -187,7 +190,11 @@ final class MovieSearchView extends LinearLayout {
                 } catch (RuntimeException unavailable) {
                     main.post(() -> {
                         main.removeCallbacks(expired);
-                        if (!closed && !signal.isCanceled()) { loading.setVisibility(View.GONE); status.setText("Поиск сейчас недоступен"); }
+                        if (!closed && !signal.isCanceled()) {
+                            loading.setVisibility(View.GONE);
+                            status.setText("Поиск сейчас недоступен");
+                            addEntry(app, cards);
+                        }
                     });
                 }
             });
@@ -346,6 +353,14 @@ final class MovieSearchView extends LinearLayout {
         focusFrame.track(view, 24);
         view.setOnClickListener(v -> click.run());
         return view;
+    }
+    /** Entry point for a row that cannot show cards: search inside the app, or open it if it has no search. */
+    private void addEntry(MediaVoiceApps.App app, LinearLayout cards) {
+        if (closed || cards.getChildCount() > 0) return;
+        boolean inAppSearch = AppSearchEntry.base(app.id) != null || SiteSearch.supports(app)
+                || MediaSearch.searchActivity(activity, app.pkg) != null;
+        cards.addView(action(AppSearchEntry.buttonLabel(app, inAppSearch), () -> openSearch.accept(app)),
+                new LayoutParams(dp(270), dp(64)));
     }
     private TextView action(String label, Runnable click) {
         TextView view = text(label, 16, Color.WHITE);

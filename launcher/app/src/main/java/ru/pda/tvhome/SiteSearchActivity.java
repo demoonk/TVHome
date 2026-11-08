@@ -18,7 +18,7 @@ public final class SiteSearchActivity extends Activity {
         if(!SiteSearch.content(app.id,uri))return false;
         if(!active||isFinishing()||isDestroyed())return true;
         if(opening)return true;
-        Intent intent=new Intent(Intent.ACTION_VIEW,uri).setPackage(app.pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        Intent intent=new Intent(Intent.ACTION_VIEW,android.net.Uri.parse(SiteSearchRules.appLink(app.id,uri.toString()))).setPackage(app.pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         if(intent.resolveActivity(getPackageManager())==null){Toast.makeText(this,"Приложение не поддерживает эту ссылку",Toast.LENGTH_LONG).show();return true;}
         opening=true;
         try{startActivity(intent);setResult(RESULT_OK);finish();overridePendingTransition(0,0);}

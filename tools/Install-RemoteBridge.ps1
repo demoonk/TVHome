@@ -34,13 +34,17 @@ foreach ($bridgePid in ($bridgePids -split '\s+')) {
     if ($commandLine -notmatch 'pqtv-bridge') { throw 'Bridge PID identity changed; stopped' }
     Invoke-Target "kill $bridgePid" | Out-Null
 }
+# Three arguments only: the threshold is the default inside the bridge, so an already
+# published DEX keeps working with this script.
 Invoke-Target "CLASSPATH=/data/local/tmp/tvhome-remote-2.dex nohup app_process /system/bin --nice-name=pqtv-bridge PqRemoteProof $eventDevice $eventSize 0 >/data/local/tmp/tvhome-remote-2.log 2>&1 </dev/null &" | Out-Null
-$ready = $false
+$readyLine = ''
 for ($attempt = 0; $attempt -lt 10; $attempt++) {
     Start-Sleep -Milliseconds 200
-    if ((Invoke-Target 'cat /data/local/tmp/tvhome-remote-2.log') -match 'PQ_REMOTE_READY') { $ready = $true; break }
+    $bridgeLog = Invoke-Target 'cat /data/local/tmp/tvhome-remote-2.log'
+    $found = @($bridgeLog -split "`r?`n" | Where-Object { $_ -match 'PQ_REMOTE_READY' })
+    if ($found.Count -gt 0) { $readyLine = $found[0]; break }
 }
-if (-not $ready) { throw 'Bridge did not report readiness' }
+if (-not $readyLine) { throw 'Bridge did not report readiness' }
 $guard = Join-Path $PSScriptRoot 'assistant-package-guard.sh'
 if (Test-Path -LiteralPath $guard -PathType Leaf) {
     $guardPid = (& $adbPath -s $Device shell cat /data/local/tmp/assistant-package-guard.pid 2>$null | Out-String).Trim()
@@ -59,7 +63,7 @@ if (Test-Path -LiteralPath $guard -PathType Leaf) {
     }
     & $adbPath -s $Device push $guard /data/local/tmp/assistant-package-guard.sh
     if ($LASTEXITCODE -ne 0) { throw 'Assistant guard upload failed' }
-    Invoke-Target 'nohup sh /data/local/tmp/assistant-package-guard.sh >/data/local/tmp/assistant-package-guard.log 2>&1 </dev/null &' | Out-Null
+    Invoke-Target 'setsid sh /data/local/tmp/assistant-package-guard.sh >/data/local/tmp/assistant-package-guard.log 2>&1 < /dev/null &' | Out-Null
     $guardReady = $false
     for ($attempt = 0; $attempt -lt 15; $attempt++) {
         $startedPid = (& $adbPath -s $Device shell cat /data/local/tmp/assistant-package-guard.pid 2>$null | Out-String).Trim()
@@ -71,4 +75,8 @@ if (Test-Path -LiteralPath $guard -PathType Leaf) {
     }
     if (-not $guardReady) { throw 'Assistant guard did not report readiness' }
 }
-Write-Output 'Remote bridge started for this boot. Test the physical gear, Back from search, and held volume keys.'
+Write-Output 'Remote bridge started for this boot. One press opens picture settings; holding the gear opens sound settings.'
+if ($readyLine -match 'sound=unavailable') {
+    Write-Warning 'Sound settings activity is not resolvable on this firmware: the held press falls back to picture settings.'
+}
+Write-Output 'Test one press and a held press of the physical gear, Back from search, and held volume keys.'
