@@ -297,7 +297,7 @@ function Install-WeatherWidget {
         Write-Warning "Виджет погоды недоступен: GitHub не ответил, а файл в кэше отсутствует или не проходит контрольную сумму: $widgetPath. Остальные настройки сохранены."
         return $false
     }
-    $installed = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'install', '-r', $widgetPath)
+    $installed = Invoke-Adb -Arguments @('-s', $Device, 'install', '-r', $widgetPath)
     if ($installed -notmatch '(?m)^Success\s*$') {
         Write-Warning "Виджет погоды не установлен: $installed. Лаунчер остаётся настроенным; повторите позже."
         return $false
@@ -511,9 +511,17 @@ if ($googleReady) {
     # non-interactive shell ADB runs, so the guard's pid file (its single-instance check) was never written
     # and the helper could not be traced. setsid is a real binary and detaches the helper from the ADB session.
     Write-Output (Invoke-Adb -Arguments @('-s', $Device, 'shell', 'setsid sh /data/local/tmp/assistant-package-guard.sh >/data/local/tmp/assistant-package-guard.log 2>&1 < /dev/null &'))
-    $guardPid = ((Invoke-Adb -Arguments @('-s', $Device, 'shell', 'cat /data/local/tmp/assistant-package-guard.pid')) -join '')
+    # setsid forks when it is already a group leader, so the pid in the file can belong to
+    # the forked child and can lag one moment behind the backgrounded command. Verify the
+    # cmdline of the pid in the file, retrying briefly; do not rely on ls exit code here.
+    $guardPid = ''
+    for ($attempt = 0; $attempt -lt 8; $attempt++) {
+        $guardPid = ((Invoke-Adb -Arguments @('-s', $Device, 'shell', 'cat /data/local/tmp/assistant-package-guard.pid')) -join '')
+        if ($guardPid -match '^[1-9][0-9]*$' -and (Invoke-Adb -Arguments @('-s', $Device, 'shell', "cat /proc/$guardPid/cmdline 2>/dev/null") -AllowFailure) -match 'assistant-package-guard\.sh') { break }
+        Start-Sleep -Milliseconds 500
+    }
     if ($guardPid -notmatch '^[1-9][0-9]*$') { throw 'Помощник не записал pid-файл: его нельзя проверить как единственный запущенный. Запустите guard вручную.' }
-    if ((Invoke-Adb -Arguments @('-s', $Device, 'shell', "ls -d /proc/$guardPid")) -match 'No such file') { throw "Помощник не запущен (pid $guardPid)." }
+    if ((Invoke-Adb -Arguments @('-s', $Device, 'shell', "cat /proc/$guardPid/cmdline 2>/dev/null") -AllowFailure) -notmatch 'assistant-package-guard\.sh') { throw "Помощник не запущен (pid $guardPid)." }
     $request = 'check:' + [guid]::NewGuid().ToString('N')
     Write-Output (Invoke-Adb -Arguments @('-s', $Device, 'shell', 'settings', 'put', 'secure', 'ru_pda_tvhome_assistant_request', $request))
     $ack = ''
