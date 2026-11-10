@@ -17,7 +17,6 @@ import android.content.pm.ResolveInfo;
 import android.content.pm.ChangedPackages;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
-import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -120,7 +119,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** Idle time on Home before ClockActivity; 0 is off (config.xml, home_idle_clock_minutes). */
     private long idleClockMs;
     private final Runnable showIdleClock = () -> startActivity(new Intent(this, ClockActivity.class));
-    /** Screen dimmer (launcher settings, dim_delay): 0 is off; level 20..90 %, OLED draws pure black. */
+    /** Screen dimmer (launcher settings, dim_delay): 0 is off; level 0..100 %, OLED draws pure black. */
     private long dimDelayMs;
     /** How long that dimmer takes to fade out (launcher settings, dim_ramp), in milliseconds. */
     private long dimRampMs = 60_000L;
@@ -239,6 +238,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     };
     /** The pills have been filled in once; later resumes refresh them after the first frame. */
     private boolean pillsShown;
+    /** Home asks the on-device helper for the gear bridge once per start, after the first frame is drawn. */
+    private final BridgeTrigger bridgeTrigger = new BridgeTrigger();
     private TextView shamsiDate;
     private TextView stats;
     private List<RaceWeekend.Race> raceCalendar;
@@ -435,6 +436,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // restore_key_services: after a force stop, put back the remote's accessibility helpers that Android took
         // off the list (needs WRITE_SECURE_SETTINGS, granted by build-and-install with RESTORE_KEY_SERVICES=1).
         if (cfg.restoreKeyServices) ServiceRepair.restore(this);
+        // Voice entry point: the shell-side guard answers only while it runs, so after a reboot or framework
+        // restart Home puts back the assistant choice recorded here (needs WRITE_SECURE_SETTINGS; without it, or
+        // when the recorded choice is the system assistant, nothing is written). One read, up to three writes.
+        AssistantChoice.restore(this);
         settingsRevision = settingsRevision();
         applyViewInputsHandler(cfg.handleViewInputs);
         settingsKeycodes = cfg.settingsKeycodes;
@@ -451,8 +456,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         idleClockMs = cfg.homeIdleClockMinutes * MINUTE_MS;
         // On-TV choices live over config.xml in launcher_settings (see LauncherSettingsActivity).
         SharedPreferences tvChoices = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
-        dimDelayMs = tvChoices.getInt(Config.DIM_DELAY_KEY, 0) * MINUTE_MS;
-        dimLevelPct = Math.min(90, Math.max(20, tvChoices.getInt(Config.DIM_LEVEL_KEY, 50)));
+        dimDelayMs = tvChoices.getInt(Config.DIM_DELAY_KEY, 1) * MINUTE_MS;
+        dimLevelPct = Math.min(100, Math.max(0, tvChoices.getInt(Config.DIM_LEVEL_KEY, 90)));
         dimOled = tvChoices.getBoolean(Config.DIM_OLED_KEY, false);
         // How long the fade takes: the slow ramp is the point, a black screen appearing in one frame is not.
         dimRampMs = 3_000L;   // fixed: the screen always fades over three seconds
@@ -484,7 +489,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         dimScrim = findViewById(R.id.dimScrim);
         ambientGlow = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getBoolean("tile_glow", cfg.ambientGlow);
         appGlow = cfg.appGlow;
-        glowBrightness = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getInt("tile_glow_brightness", 50);
+        glowBrightness = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getInt("tile_glow_brightness", 10);
         glowCore = new ImageView(this);
         glowCore.setScaleType(ImageView.ScaleType.FIT_XY);
         int glowSide = Math.round(getResources().getDisplayMetrics().widthPixels * 1.4f);
@@ -1112,6 +1117,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             updateInputsButton();
             pillsShown = true;
         }
+        askBridgeAfterFirstDraw();
         if (showStats) startStats();
         startWeather();
         sky.update();
@@ -1129,6 +1135,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 handler.postDelayed(this::playPetalShower, 450);
             }
         }
+        // Back from an app that was opened from the results screen: those cards come back with the window.
+        if (SearchReturn.takePending(this)) reopenSearch();
+    }
+
+    private void reopenSearch() {
+        android.util.Log.w("tvsearch", "back from app: search window reopened");
+        startActivity(new Intent(this, VoiceLaunchActivity.class)
+                .putExtra(SearchReturn.EXTRA, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
     /** Settings entry leaves a non-focusable mode notification over the wallpaper. */
@@ -2488,18 +2503,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         weatherBg = bg;
         bg.post(() -> {
             if (weatherBg != bg) return;
-            final WeatherRow row = readWeather();
+            final WeatherSnapshot.Row row = readWeather();
             handler.post(() -> {
                 if (weatherBg != bg) return;
                 applyWeather(row);
                 // Nothing to show, or a reading the card has not replaced since: ask it once for a fresh one and
                 // read again shortly after. A card that is not installed simply never answers.
-                if ((row == null || System.currentTimeMillis() - row.at > WEATHER_STALE_MS) && !weatherAsked) {
+                if ((row == null || System.currentTimeMillis() - row.at() > WEATHER_STALE_MS) && !weatherAsked) {
                     weatherAsked = true;
                     sendBroadcast(new Intent(WEATHER_REFRESH).setPackage(WEATHER_PKG));
                     bg.postDelayed(() -> {
                         if (weatherBg != bg) return;
-                        final WeatherRow again = readWeather();
+                        final WeatherSnapshot.Row again = readWeather();
                         handler.post(() -> {
                             if (weatherBg != bg) return;
                             applyWeather(again);
@@ -2518,43 +2533,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     /** One snapshot row from the card's provider, or null: not installed, no place chosen, nothing fetched yet. */
-    private WeatherRow readWeather() {
-        try (Cursor c = getContentResolver().query(Uri.parse("content://" + WEATHER_AUTHORITY),
-                new String[] {"city", "temp_c", "humidity", "at"}, null, null, null)) {
-            if (c == null || !c.moveToFirst()) return null;
-            String city = c.getString(0);
-            if (city == null || city.isEmpty()) return null;
-            return new WeatherRow(city, c.getInt(1), c.getInt(2), c.getLong(3));
-        } catch (Exception noCard) {
-            return null;
-        }
-    }
+    private WeatherSnapshot.Row readWeather() { return WeatherSnapshot.read(this); }
 
-    private void applyWeather(WeatherRow row) {
+    private void applyWeather(WeatherSnapshot.Row row) {
         if (weatherBlock == null) return;
         if (row == null) {
             weatherBlock.setVisibility(View.GONE);   // an absent card takes no place on Home
             if (weatherRule != null) weatherRule.setVisibility(View.GONE);
             return;
         }
-        weatherCity.setText(row.city);
-        weatherNow.setText(getString(R.string.weather_now, row.tempC, row.humidity));
+        weatherCity.setText(row.city());
+        weatherNow.setText(getString(R.string.weather_now, row.tempC(), row.humidity()));
         weatherBlock.setVisibility(View.VISIBLE);
         if (weatherRule != null) weatherRule.setVisibility(View.VISIBLE);
-    }
-
-    /** One reading of the snapshot provider. */
-    private static final class WeatherRow {
-        final String city;
-        final int tempC, humidity;
-        final long at;
-
-        WeatherRow(String city, int tempC, int humidity, long at) {
-            this.city = city;
-            this.tempC = tempC;
-            this.humidity = humidity;
-            this.at = at;
-        }
     }
 
     /** One quiet line, e.g. "CPU 8%  ·  Memory 430 MB free  ·  Storage 3.1 GB free". Runs off the main thread. */
@@ -2997,6 +2988,33 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         root.invalidate();   // a resume that changes nothing on screen still draws once, so the refresh runs
     }
 
+    /**
+     * Asks the on-device helper for the gear bridge after this frame is drawn, and only when the settings row
+     * «Загрузка моста» is set to «При старте Home»: by default loading is manual and the row asks. The frame is the
+     * point where the interface is on screen and the Bluetooth remote has had time to be enumerated, which at
+     * BOOT_COMPLETED it often had not. Only the shell domain reads /dev/input, so the launcher cannot start the
+     * bridge itself; the helper connects to adbd with the key the TV already recorded and runs the ensure script,
+     * and the guard keeps the bridge running.
+     */
+    private void askBridgeAfterFirstDraw() {
+        if (!BridgeTrigger.auto(getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE))) return;
+        if (!BridgeTrigger.canAsk(bridgeTrigger.helperInstalled(this))) return;
+        if (!bridgeTrigger.shouldAsk()) return;
+        root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                root.getViewTreeObserver().removeOnPreDrawListener(this);
+                // Posted from inside the frame's traversal, so it runs after that frame is drawn.
+                handler.post(() -> {
+                    if (isDestroyed()) return;
+                    bridgeTrigger.ask(MainActivity.this);
+                });
+                return true;
+            }
+        });
+        root.invalidate();   // a resume that changes nothing on screen still draws once, so the ask runs
+    }
+
     /** Shows the Wi-Fi network name on the button when we can read it, otherwise the connection type. */
     private void updateWifiLabel() {
         String text = getString(R.string.wifi);
@@ -3367,7 +3385,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         @Override
         public void run() {
             boolean on = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
-                    .getBoolean(Config.OLED_SHIFT_KEY, false);
+                    .getBoolean(Config.OLED_SHIFT_KEY, true);
             if (root != null) {
                 root.setTranslationX(on ? shiftRandom.nextInt(7) - 3 : 0f);
                 root.setTranslationY(on ? shiftRandom.nextInt(7) - 3 : 0f);

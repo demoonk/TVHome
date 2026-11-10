@@ -16,7 +16,7 @@ final class SettingsColumns {
     private final TextView title, breadcrumb;
     private final Map<Integer,View> sources=new HashMap<>();
     /** Раздел «Заморозка программ» — сразу после видимых программ; раздел «Помощь» — предпоследний. */
-    private static final int FREEZE=2,HELP=10;
+    private static final int FREEZE=2,HELP=10,SYSTEM=11;
     private final String[] names;
     private final int[][] rows={{R.id.reorderChoice}, {}, {}, {R.id.tileCropChoice,R.id.animationsChoice,R.id.oledShiftChoice,R.id.headerPlateChoice,R.id.plateOpacityChoice,R.id.plateBlurChoice}, {},
         {R.id.dimDelayChoice,R.id.dimRampChoice}, {R.id.clockColorChoice,R.id.clockCornerChoice,R.id.clockSizeChoice,R.id.clockFontChoice,R.id.clockPositionChoice},
@@ -72,8 +72,26 @@ final class SettingsColumns {
         showGroup(initial,false);categoryButtons.get(initial).requestFocus();ready=true;
         if("voice".equals(requested)||"sleep".equals(requested))showGroup(initial,true);
     }
+    /**
+     * An informational row is read, not pressed, so it must not be dimmed: at 38% the paragraph before the program
+     * list was unreadable on the TV. Only a row that is really switched off stays faded.
+     */
+    static int rowAlpha(boolean enabled, boolean informational) {
+        return (enabled || informational) ? 255 : 97;
+    }
+
+    /** A paragraph before the rows: no indicator, nothing to press, full brightness. */
+    private View caption(String text){
+        LinearLayout row=new LinearLayout(activity);row.setPadding(dp(20),dp(10),dp(20),dp(10));
+        TextView name=text(text,14,0xFFE8EAED);name.setSingleLine(false);
+        row.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        row.setAlpha(rowAlpha(false,true)/255f);
+        LinearLayout.LayoutParams rowParams=new LinearLayout.LayoutParams(-1,-2);rowParams.bottomMargin=dp(6);row.setLayoutParams(rowParams);
+        return row;
+    }
+
     private View row(String label,String value,boolean enabled,Runnable action,Boolean switched,Boolean checked){
-        LinearLayout row=new LinearLayout(activity);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(20),dp(10),dp(20),dp(10));row.setMinimumHeight(dp(60));row.setFocusable(enabled);row.setClickable(enabled);row.setEnabled(enabled);row.setAlpha(enabled?1:.38f);
+        LinearLayout row=new LinearLayout(activity);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(20),dp(10),dp(20),dp(10));row.setMinimumHeight(dp(60));row.setFocusable(enabled);row.setClickable(enabled);row.setEnabled(enabled);row.setAlpha(rowAlpha(enabled,false)/255f);
         final TextView[] indicator=new TextView[1];LinearLayout copy=new LinearLayout(activity);copy.setOrientation(LinearLayout.VERTICAL);TextView name=text(label,14,0xFFE8EAED);copy.addView(name);TextView sub=text(value==null?"":value,12,0xFF9AA0A6);if(value!=null&&!value.isEmpty()){LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.topMargin=dp(3);copy.addView(sub,lp);}row.addView(copy,new LinearLayout.LayoutParams(0,-2,1));
         if(switched!=null){Switch toggle=new Switch(activity);toggle.setChecked(switched);toggle.setFocusable(false);toggle.setClickable(false);row.addView(toggle);}else{TextView arrow=text(checked==null?"›":checked?"◉":"○",20,0xFFF1F3F4);indicator[0]=arrow;row.addView(arrow,new LinearLayout.LayoutParams(dp(30),-2));}
         LinearLayout.LayoutParams rowParams=new LinearLayout.LayoutParams(-1,-2);rowParams.bottomMargin=dp(4);row.setLayoutParams(rowParams);row.setOnKeyListener((v,key,event)->{if(key==KeyEvent.KEYCODE_DPAD_UP||key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.getAction()==KeyEvent.ACTION_DOWN){int step=key==KeyEvent.KEYCODE_DPAD_UP?-1:1;for(int i=list.indexOfChild(row)+step;i>=0&&i<list.getChildCount();i+=step)if(list.getChildAt(i).isFocusable()){list.getChildAt(i).requestFocus();break;}}return true;}if(key==KeyEvent.KEYCODE_DPAD_LEFT){if(event.getAction()==KeyEvent.ACTION_DOWN)categoryButtons.get(section).requestFocus();return true;}return false;});row.setOnClickListener(v->{returnRow=list.indexOfChild(row);action.run();});row.setOnFocusChangeListener((v,on)->{row.setBackground(fill(on?0xFFE8EAED:0x00000000));name.setTextColor(on?0xFF202124:0xFFF1F3F4);sub.setTextColor(on?0xFF68696B:0xFF9AA0A6);if(indicator[0]!=null)indicator[0].setTextColor(on?0xFF0E0E0F:0xFFE8EAED);focusAnimation(row,on);});return row;
@@ -87,8 +105,10 @@ final class SettingsColumns {
             list.addView(row("Рядов приложений",String.valueOf(count),true,()->choose("Рядов приложений",new String[]{"1","2","3"},count-1,index->{sources.get(new int[]{R.id.rows1,R.id.rows2,R.id.rows3}[index]).performClick();}),null,null));
         }
         if(group==FREEZE){
-            list.addView(row("Приложение не может отключить чужие пакеты: нужны привилегированные права или root. Список показывает то, что безопасно замораживать, и применяется через adb: pm disable-user --user 0 <пакет>.",null,false,()->{},null,null));
-            for(FreezableApps.Item item:FreezableApps.list())list.addView(row(item.pkg(),item.what(),true,()->command(item.pkg()),null,null));
+            list.addView(row("Приложение не может отключить чужие пакеты: строки здесь работают через ADB-помощника, который сверяет пакет со своим списком защиты. Переключатель показывает программу включенной; замороженная программа показана выключенной. Пока помощник не отвечает, строка ждёт пять секунд и сообщает об этом.",null,false,()->{},null,null));
+            for(FreezableApps.Item item:FreezableApps.list()){final boolean frozen=frozen(item.pkg());
+                list.addView(row(item.pkg(),item.what(),true,()->helper(frozen?"unfreeze":"freeze",item.pkg(),frozen?"Разморожено":"Заморожено"),!frozen,null));
+            }
         }
         if(group==4){
             list.addView(row("Источник",WallpaperSource.MODES[WallpaperSource.modeIndex(activity)],true,()->choose("Источник обоев",WallpaperSource.MODES,WallpaperSource.modeIndex(activity),i->{if(i==3)WallpaperSource.setMode(activity,"builtin");else if(i==4){if(ProjectivyClient.discover(activity)==null)Toast.makeText(activity,"Aerial Views с поддержкой Projectivy не найден",Toast.LENGTH_LONG).show();else WallpaperSource.setMode(activity,"provider");}else WallpaperSource.setMode(activity,new String[]{"none","file","folder"}[i]);}),null,null));
@@ -96,8 +116,8 @@ final class SettingsColumns {
             if(mode.equals("file"))list.addView(row("Выбрать файл",WallpaperSource.name(activity,WallpaperSource.FILE),true,()->((LauncherSettingsActivity)activity).pickBackgroundFile(),null,null));
             if(mode.equals("folder")){
                 list.addView(row("Выбрать папку",WallpaperSource.name(activity,WallpaperSource.FOLDER),true,()->((LauncherSettingsActivity)activity).pickBackgroundFolder(),null,null));
-                int minutes=WallpaperSource.minutes(activity),selected=0;for(int i=0;i<WallpaperSource.INTERVALS.length;i++)if(WallpaperSource.INTERVALS[i]==minutes)selected=i;final int current=selected;
-                list.addView(row("Менять каждые",minutes+" мин.",true,()->choose("Менять каждые",new String[]{"1 минута","5 минут","15 минут","30 минут"},current,i->{WallpaperSource.prefs(activity).edit().putInt(WallpaperSource.MINUTES,WallpaperSource.INTERVALS[i]).apply();WallpaperSource.changed(activity);}),null,null));
+                int minutes=WallpaperSource.minutes(activity);
+                list.addView(row("Менять каждые",minutes+" мин.",true,()->((LauncherSettingsActivity)activity).chooseSlider("Менять каждые",1,60,minutes,i->{WallpaperSource.prefs(activity).edit().putInt(WallpaperSource.MINUTES,i).apply();WallpaperSource.changed(activity);}," мин."),null,null));
                 list.addView(row("Режим смены обоев","Плитки становятся прозрачными",true,()->{WallpaperSource.requestNext(activity);activity.finish();},null,null));
             }
             if(mode.equals("provider"))list.addView(row("Режим смены обоев","Плитки становятся прозрачными",true,()->{WallpaperSource.requestNext(activity);activity.finish();},null,null));
@@ -125,13 +145,12 @@ final class SettingsColumns {
                 p.edit().putBoolean("tile_glow",!glow).putLong(Config.SETTINGS_REVISION_KEY,p.getLong(Config.SETTINGS_REVISION_KEY,0)+1).apply();
                 activity.setResult(Activity.RESULT_OK);showGroup(group,true);
             },glow,null));
-            final int brightness=prefs.getInt("tile_glow_brightness",50);
-            final int[] options={10,20,30,40,50,60,70,80,90};int current=0;for(int i=0;i<options.length;i++)if(options[i]==brightness)current=i;final int cur=current;
-            list.addView(row("Яркость подсветки",brightness+"%",true,()->choose("Яркость подсветки",new String[]{"10%","20%","30%","40%","50%","60%","70%","80%","90%"},cur,i->{
+            final int brightness=prefs.getInt("tile_glow_brightness",10);
+            list.addView(row("Яркость подсветки",brightness+"%",true,()->((LauncherSettingsActivity)activity).chooseSlider("Яркость подсветки",0,100,brightness,i->{
                 android.content.SharedPreferences p=activity.getSharedPreferences(Config.SETTINGS_NAME,0);
-                p.edit().putInt("tile_glow_brightness",options[i]).putLong(Config.SETTINGS_REVISION_KEY,p.getLong(Config.SETTINGS_REVISION_KEY,0)+1).apply();
+                p.edit().putInt("tile_glow_brightness",i).putLong(Config.SETTINGS_REVISION_KEY,p.getLong(Config.SETTINGS_REVISION_KEY,0)+1).apply();
                 activity.setResult(Activity.RESULT_OK);
-            }),null,null));
+            },"%"),null,null));
         }
         if(group==1){
             android.content.pm.PackageManager pm=activity.getPackageManager();
@@ -149,22 +168,112 @@ final class SettingsColumns {
             }
         }
         if(group==HELP)HelpMenu.install(activity,list,density,()->categoryButtons.get(HELP).requestFocus());
+        if(group==SYSTEM){
+            // Мост ловит шестерёнку, но запустить его может только ADB-помощник на ТВ: ordinary app не читает
+            // /dev/input. Row решает, спрашивает ли Home сам; нажатие спрашивает один раз.
+            android.content.SharedPreferences p=activity.getSharedPreferences(Config.SETTINGS_NAME,0);
+            boolean auto=BridgeTrigger.auto(p);
+            boolean installed=new BridgeTrigger().helperInstalled(activity);
+            list.addView(caption("Мост ловит шестерёнку с пульта. Запустить его может только ADB-помощник на ТВ, потому что события пульта читает shell-домен. Помощник "+(installed?"установлен":"не установлен")+". По умолчанию загрузка ручная: лаунчер ничего не запускает сам."));
+            list.addView(row("Загрузка моста",BridgeTrigger.MODES[BridgeTrigger.modeIndex(auto)],true,()->choose("Загрузка моста",BridgeTrigger.MODES,BridgeTrigger.modeIndex(auto),i->{
+                android.content.SharedPreferences s=activity.getSharedPreferences(Config.SETTINGS_NAME,0);
+                s.edit().putBoolean(BridgeTrigger.AUTO_KEY,i==1).putLong(Config.SETTINGS_REVISION_KEY,s.getLong(Config.SETTINGS_REVISION_KEY,0)+1).apply();
+                activity.setResult(Activity.RESULT_OK);showGroup(group,true);
+            }),null,null));
+            list.addView(row("Запросить загрузку сейчас",BridgeTrigger.canAsk(installed)?"одно подключение помощника на нажатие":"помощник не установлен",
+                    BridgeTrigger.canAsk(installed),()->{
+                        if(!BridgeTrigger.canAsk(installed))return;
+                        new BridgeTrigger().ask(activity);
+                        Toast.makeText(activity,"Запрос отправлен помощнику: он выполнит ровно одну команду, результат в его логе",Toast.LENGTH_LONG).show();
+                    },null,null));
+        }
         for(int id:rows[group]){
             View original=sources.get(id);if(!(original instanceof TextView))continue;
-            if(group==6&&id!=R.id.clockColorChoice&&!activity.getSharedPreferences(Config.SETTINGS_NAME,0).getBoolean(Config.CLOCK_ON_KEY,false))continue;
+            if(group==6&&id!=R.id.clockColorChoice&&!activity.getSharedPreferences(Config.SETTINGS_NAME,0).getBoolean(Config.CLOCK_ON_KEY,true))continue;
             if(group==3&&(id==R.id.plateOpacityChoice||id==R.id.plateBlurChoice)&&!activity.getSharedPreferences(Config.SETTINGS_NAME,0).getBoolean(Config.HEADER_PLATE_KEY,activity.getResources().getBoolean(R.bool.header_plate)))continue;
             if(id==R.id.reorderChoice&&original.getVisibility()==View.GONE)continue;
             String full=((TextView)original).getText().toString();int colon=full.indexOf(':');String label=colon<0?full:full.substring(0,colon),value=colon<0?"":full.substring(colon+1).trim();
+            if(group==7){
+                android.content.SharedPreferences p=activity.getSharedPreferences(Config.SETTINGS_NAME,0);
+                if(id==R.id.assistantChoice){
+                    String[] assistants={"Встроенный в лаунчер","Системный (Google)"};int current=AssistantChoice.isLauncher(activity)?0:1;
+                    list.addView(row("Голосовой помощник",assistants[current],original.isEnabled(),
+                            ()->choose("Голосовой помощник",assistants,current,i->{
+                                if((i==0)!=AssistantChoice.isLauncher(activity))original.performClick();
+                                showGroup(group,true);}),null,null));
+                    continue;
+                }
+                if(id==R.id.microphoneChoice){
+                    String[] mics={"Пульт","ТВ","Пульт+ТВ"};int mode=p.getInt("voice_microphone",1);
+                    int idx=mode==2?2:(mode==0?1:0);final int current=idx;
+                    list.addView(row("Выбор микрофона",mics[current],original.isEnabled(),
+                            ()->choose("Выбор микрофона",mics,current,i->{
+                                int stored=new int[]{1,0,2}[i];
+                                activity.getSharedPreferences(Config.SETTINGS_NAME,0).edit().putInt("voice_microphone",stored).apply();
+                                showGroup(group,true);}),null,null));
+                    int seconds=TvMicrophoneInput.captureSeconds(p.getInt("voice_timeout",10));
+                    list.addView(sliderRow("Тайм-аут прослушивания",seconds,"когда слушает лаунчер",
+                            v->activity.getSharedPreferences(Config.SETTINGS_NAME,0).edit().putInt("voice_timeout",v).apply()));
+                    final boolean mic=activity.getPackageManager().checkPermission("android.permission.RECORD_AUDIO",activity.getPackageName())==android.content.pm.PackageManager.PERMISSION_GRANTED;
+                    list.addView(row("Права помощника",mic?"микрофон выдан":"микрофон не выдан",true,
+                            ()->helper("grant","",mic?"Права подтверждены":"Права выданы"),null,null));
+                    continue;
+                }
+            }
             boolean binary=id==R.id.animationsChoice||id==R.id.oledShiftChoice||id==R.id.headerPlateChoice||id==R.id.clockColorChoice||id==R.id.assistantChoice||id==R.id.microphoneChoice;
-            Boolean on=null;if(binary){android.content.SharedPreferences prefs=activity.getSharedPreferences(Config.SETTINGS_NAME,0);on=id==R.id.assistantChoice?AssistantChoice.isLauncher(activity):id==R.id.microphoneChoice?prefs.getInt("voice_microphone",1)==1:id==R.id.animationsChoice?prefs.getBoolean("animations",true):id==R.id.clockColorChoice?prefs.getBoolean(Config.CLOCK_ON_KEY,false):id==R.id.headerPlateChoice?prefs.getBoolean(Config.HEADER_PLATE_KEY,activity.getResources().getBoolean(R.bool.header_plate)):prefs.getBoolean(Config.OLED_SHIFT_KEY,false);}
+            Boolean on=null;if(binary){android.content.SharedPreferences prefs=activity.getSharedPreferences(Config.SETTINGS_NAME,0);on=id==R.id.assistantChoice?AssistantChoice.isLauncher(activity):id==R.id.microphoneChoice?prefs.getInt("voice_microphone",1)==1:id==R.id.animationsChoice?prefs.getBoolean("animations",true):id==R.id.clockColorChoice?prefs.getBoolean(Config.CLOCK_ON_KEY,true):id==R.id.headerPlateChoice?prefs.getBoolean(Config.HEADER_PLATE_KEY,activity.getResources().getBoolean(R.bool.header_plate)):prefs.getBoolean(Config.OLED_SHIFT_KEY,true);}
             list.addView(row(label,value,original.isEnabled(),()->{original.performClick();if(!choicesOpen)showGroup(group,true);},on,null));
         }
         if(focus){if(returnRow<list.getChildCount()&&list.getChildAt(returnRow).isFocusable())list.getChildAt(returnRow).requestFocus();else focusFirst();}rendering=false;if(changed)enter(false);
     }
+    /** Smooth regulation for the remote: left and right step by one second, up and down move between rows. */
+    private View sliderRow(String label,int value,String note,IntConsumer changed){
+        final int[] current={TvMicrophoneInput.captureSeconds(value)};
+        // Stacked, not side by side: with the bar taking a fixed 240 dp next to the text, the label column was too
+        // narrow and the words fell one above another. Here the label wraps over the row width and the regulator
+        // goes below it.
+        LinearLayout row=new LinearLayout(activity);row.setOrientation(LinearLayout.VERTICAL);row.setPadding(dp(20),dp(10),dp(20),dp(10));row.setMinimumHeight(dp(60));row.setFocusable(true);row.setClickable(true);
+        TextView name=text(label,14,0xFFE8EAED);name.setSingleLine(false);
+        row.addView(name,new LinearLayout.LayoutParams(-1,-2));
+        TextView sub=text(current[0]+" с — "+note,12,0xFF9AA0A6);
+        LinearLayout.LayoutParams subParams=new LinearLayout.LayoutParams(-1,-2);subParams.topMargin=dp(3);row.addView(sub,subParams);
+        android.widget.SeekBar bar=new android.widget.SeekBar(activity);bar.setMax(14);bar.setFocusable(false);bar.setClickable(false);
+        LinearLayout.LayoutParams barParams=new LinearLayout.LayoutParams(-1,-2);barParams.topMargin=dp(6);row.addView(bar,barParams);
+        Runnable paint=()->{sub.setText(current[0]+" с — "+note);bar.setProgress(current[0]-1);};
+        paint.run();
+        row.setOnKeyListener((v,key,event)->{
+            if(event.getAction()!=KeyEvent.ACTION_DOWN)return false;
+            if(key==KeyEvent.KEYCODE_DPAD_LEFT||key==KeyEvent.KEYCODE_DPAD_RIGHT){
+                int next=current[0]+(key==KeyEvent.KEYCODE_DPAD_RIGHT?1:-1);
+                if(next<1||next>15||next==current[0])return true;
+                current[0]=next;changed.accept(next);paint.run();return true;
+            }
+            if(key==KeyEvent.KEYCODE_DPAD_UP||key==KeyEvent.KEYCODE_DPAD_DOWN){
+                int step=key==KeyEvent.KEYCODE_DPAD_UP?-1:1;
+                for(int i=list.indexOfChild(row)+step;i>=0&&i<list.getChildCount();i+=step)if(list.getChildAt(i).isFocusable()){list.getChildAt(i).requestFocus();break;}
+                return true;
+            }
+            return false;
+        });
+        row.setOnFocusChangeListener((v,on)->{row.setBackground(fill(on?0xFFE8EAED:0x00000000));name.setTextColor(on?0xFF202124:0xFFF1F3F4);sub.setTextColor(on?0xFF68696B:0xFF9AA0A6);focusAnimation(row,on);});
+        LinearLayout.LayoutParams rowParams=new LinearLayout.LayoutParams(-1,-2);rowParams.bottomMargin=dp(4);row.setLayoutParams(rowParams);
+        return row;
+    }
     private void focusFirst(){for(int i=0;i<list.getChildCount();i++)if(list.getChildAt(i).isFocusable()){list.getChildAt(i).requestFocus();break;}}
-    /** Справочный раздел: приложение не отключает пакеты, строка показывает команду adb. */
-    private void command(String pkg){
-        Toast.makeText(activity,"pm disable-user --user 0 "+pkg,Toast.LENGTH_LONG).show();
+    /** Защитный раздел: строки исполняет ADB-помощник по handshake, одно исполнение за раз. */
+    private boolean helperBusy;
+    private boolean frozen(String pkg){
+        // Without MATCH_ALL a frozen package throws NameNotFoundException, so the row could not read its state.
+        try{return !activity.getPackageManager().getApplicationInfo(pkg,android.content.pm.PackageManager.MATCH_ALL).enabled;}
+        catch(android.content.pm.PackageManager.NameNotFoundException missing){return false;}
+    }
+    private void helper(String mode,String pkg,String done){
+        if(helperBusy)return;
+        helperBusy=true;
+        new Thread(()->{boolean ok=AssistantChoice.request(activity,mode,pkg);
+            activity.runOnUiThread(()->{helperBusy=false;if(activity.isFinishing()||activity.isDestroyed())return;
+                Toast.makeText(activity,ok?done:"Помощник не ответил за пять секунд: проверьте его запуск",Toast.LENGTH_LONG).show();
+                showGroup(mode.equals("grant")?7:FREEZE,true);});},"assistant-guard").start();
     }
     private void choose(String heading,String[] labels,int current,IntConsumer selected){final int origin=returnRow;final int choice=++choiceGeneration;rendering=true;choicesOpen=true;title.setText(heading);breadcrumb.setText("Настройки лаунчера · "+names[section]);list.removeAllViews();for(int i=0;i<labels.length;i++){final int index=i;list.addView(row(labels[i],null,true,()->{returnRow=origin;selected.accept(index);if(choice==choiceGeneration)showGroup(section,true);},null,i==current));}if(current>=0&&current<list.getChildCount())list.getChildAt(current).requestFocus();else focusFirst();rendering=false;enter(false);}
     static boolean showChoices(Activity a,String title,String[] labels,int selected,IntConsumer callback){Object tag=((View)a.findViewById(android.R.id.content)).getTag();if(!(tag instanceof SettingsColumns))return false;((SettingsColumns)tag).choose(title,labels,selected,callback);return true;}
