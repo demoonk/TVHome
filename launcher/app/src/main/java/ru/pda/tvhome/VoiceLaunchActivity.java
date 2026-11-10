@@ -18,6 +18,11 @@ public final class VoiceLaunchActivity extends Activity {
     private int speechRequestCode = 6000;
     private boolean awaitingSpeech;
     private int speechRetries;
+    private int captureRetries;
+    private int listenSeconds = 10;
+    private boolean pipeAttempted;
+    private VoiceListeningView listening;
+    private boolean ownSession; private int ownSessionMode = 1;
     private TvMicrophoneInput tvMicrophone;
     private String activeQuery;
     private String activeTarget;
@@ -39,7 +44,7 @@ public final class VoiceLaunchActivity extends Activity {
         if (intent.getBooleanExtra(SearchReturn.EXTRA, false)) {
             android.content.SharedPreferences saved = getSharedPreferences("search_return", 0);
             String query = saved.getString("query", "");
-            if (!query.isEmpty()) { search(query, saved.getString("target", "")); return; }
+            if (!query.isEmpty()) { showStored(query); return; }
         }
         String command = intent.getStringExtra("command");
         if (command != null) {
@@ -49,25 +54,30 @@ public final class VoiceLaunchActivity extends Activity {
             return;
         }
         try {
-            if (getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getInt("voice_microphone", 1) == 0
-                    && AssistantChoice.isLauncher(this)) {
-                android.widget.TextView listening = new android.widget.TextView(this);
-                listening.setText("Слушаю микрофон ТВ…");listening.setTextSize(24);
-                listening.setGravity(android.view.Gravity.CENTER);setContentView(listening);
-                tvMicrophone = new TvMicrophoneInput();
-                tvMicrophone.start(this, phrases -> { tvMicrophone=null; route(phrases); }, this::fail);
+            android.content.SharedPreferences settings = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
+            int mode = settings.getInt("voice_microphone", 1);
+            int seconds = TvMicrophoneInput.captureSeconds(settings.getInt("voice_timeout", 10));
+            if (AssistantChoice.isLauncher(this)) {
+                android.util.Log.w("tvvoice","path own session mode "+mode+" limit "+seconds+"s");
+                showListening(mode, seconds);
                 return;
             }
-            if (!intent.getBooleanExtra("remote_microphone", false) && AssistantChoice.isLauncher(this)) {
-                new AlertDialog.Builder(this).setTitle("Микрофон пульта")
-                        .setMessage("Нажмите кнопку микрофона на пульте и произнесите команду")
-                        .setPositiveButton(android.R.string.ok, (d,w)->finish())
-                        .setOnCancelListener(d->finish()).show();
-                return;
-            }
+            android.util.Log.w("tvvoice","path engine window");
             listen();
         } catch (RuntimeException 
 unavailable) { fail("Распознавание речи недоступно"); }
+    }
+
+    private void startOwnSession(int mode, int viewSeconds, VoiceListeningView view) {
+        ownSession = true; ownSessionMode = mode;
+        tvMicrophone = new TvMicrophoneInput();
+        tvMicrophone.onPartial(view::setHeard);
+        tvMicrophone.onLevel(value -> view.setLevel((float) value));
+        tvMicrophone.onState(view::setState);
+        // The pipe is only worth trying for a chosen remote mic; otherwise the session takes the engine's
+        // own microphone and the listening time is ours, not the engine's short silence window.
+        if (TvMicrophoneInput.pipeIsWorthTrying(mode)) tvMicrophone.start(this, this::phrases, this::captureError, viewSeconds, mode);
+        else tvMicrophone.startPlain(this, this::phrases, this::captureError, viewSeconds);
     }
 
     private void listen() {
@@ -78,9 +88,20 @@ unavailable) { fail("Распознавание речи недоступно");
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     .putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ru-RU")
                     .putExtra(RecognizerIntent.EXTRA_PROMPT, "Скажите: открой Виму или найди фильм в Нум")
+                    // The engine stops after a short silence and reports nothing at all. These give the spoken
+                    // phrase time; the engine may still ignore them, so the timing is checked on the device.
+                    .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000)
+                    .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 4000)
+                    .putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 4000)
                     .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5), ++speechRequestCode);
         } catch (RuntimeException unavailable) { fail("Распознавание речи недоступно"); }
     }
+
+    /** Phrases decide: the speech window can report cancellation and still carry the transcript. */
+    static boolean acceptsSpokenResult(java.util.List<String> words) { return words != null && !words.isEmpty(); }
+
+    /** Once our own session is the chosen path, the Google window must not appear after our input. */
+    static boolean engineWindowAllowed(boolean ownSession) { return !ownSession; }
 
     static String normalize(String text) {
         return text.toLowerCase(Locale.ROOT).replace('ё', 'е')
@@ -101,10 +122,17 @@ unavailable) { fail("Распознавание речи недоступно");
         if (request != speechRequestCode || !awaitingSpeech) return;
         awaitingSpeech = false;
         ArrayList<String> words = data == null ? null : data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
-        if (result != RESULT_OK || words == null || words.isEmpty()) {
+        android.util.Log.w("tvvoice","window result "+result+" phrases "+(words==null?0:words.size())+" retries "+speechRetries);
+        // Phrases decide: the window can report cancellation and still carry the transcript.
+        if (!acceptsSpokenResult(words)) {
             Toast.makeText(this, "Речь не распознана. Повторите запрос", Toast.LENGTH_LONG).show();
-            // Окно остаётся: движок уже живой, повтор не платит за холодный старт. Одна попытка, не цикл.
-            if (speechRetries < 1) { speechRetries = 1; listen(); } else finish();
+            // Окно остаётся: движок уже живой, повтор не платит за холодный старт. Две попытки, не цикл.
+            if (speechRetries < 2) {
+                speechRetries++;
+                // The first attempt pays for the cold engine, so the second waits until it is live.
+                if (speechRetries == 1) listen();
+                else timeout.postDelayed(() -> { if (!isFinishing() && !isDestroyed()) listen(); }, 1500);
+            } else finish();
             return;
         }
         speechRetries = 0;
@@ -191,6 +219,8 @@ unavailable) { fail("Распознавание речи недоступно");
             search(command.query, command.target);
             return;
         }
+        VoiceActionCommand.Parsed action = VoiceActionCommand.parse(words.get(0));
+        if (action.action() != VoiceActionCommand.Action.NONE) { act(action); return; }
         LinkedHashMap<String, ResolveInfo> apps = new LinkedHashMap<>();
         for (String category : new String[]{Intent.CATEGORY_LEANBACK_LAUNCHER, Intent.CATEGORY_LAUNCHER}) {
             for (ResolveInfo app : getPackageManager().queryIntentActivities(
@@ -209,7 +239,11 @@ unavailable) { fail("Распознавание речи недоступно");
                 }
             }
         }
-        if (matches.isEmpty()) { fail("Приложение не найдено: " + words.get(0)); return; }
+        if (matches.isEmpty()) {
+            // A spoken title is usually not an app name. Without a match it is a search query, not a failure.
+            search(words.get(0), "");
+            return;
+        }
         ResolveInfo[] found = matches.values().toArray(new ResolveInfo[0]);
         if (found.length == 1) { launch(found[0]); return; }
         String[] labels = new String[found.length];
@@ -220,6 +254,7 @@ unavailable) { fail("Распознавание речи недоступно");
     }
 
     private void search(String query, String target) {
+        android.util.Log.w("tvsearch","query "+query+" target "+(target.isEmpty()?"all":target));
         SearchReturn.remember(this, query, target);
         if (movieSearch != null) movieSearch.close();
         activeQuery = query;
@@ -237,8 +272,120 @@ unavailable) { fail("Распознавание речи недоступно");
             }
             apps = filtered;
         }
-        movieSearch = new MovieSearchView(this, query, apps, app -> searchInApp(query, app.id), edited -> search(edited, activeTarget));
+        movieSearch = new MovieSearchView(this, query, apps, app -> searchInApp(query, app.id),
+                edited -> search(edited, activeTarget), java.util.List.of(), this::resumeListening);
         setContentView(movieSearch);
+    }
+
+    /** Back to listening from the results screen: the microphone in the header asks for a new phrase. */
+    private void resumeListening() {
+        android.util.Log.w("tvvoice", "header microphone: back to listening");
+        if (!AssistantChoice.isLauncher(this)) { listen(); return; }
+        android.content.SharedPreferences settings = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
+        int mode = settings.getInt("voice_microphone", 1);
+        showListening(mode, TvMicrophoneInput.captureSeconds(settings.getInt("voice_timeout", 10)));
+    }
+
+    /** Our own listening screen, created once and reused when the header microphone asks for a new phrase. */
+    private void showListening(int mode, int seconds) {
+        listenSeconds = seconds;
+        pipeAttempted = TvMicrophoneInput.pipeIsWorthTrying(mode);
+        if (listening == null) listening = new VoiceListeningView(this, seconds, this::finish);
+        setContentView(listening);
+        if (tvMicrophone != null) tvMicrophone.close();
+        listening.stopPulse();
+        listening.startPulse();
+        startOwnSession(mode, seconds, listening);
+    }
+
+    /** The results screen rebuilt from the stored cards, so nothing is asked from the providers again. */
+    private void showStored(String query) {
+        java.util.List<SearchMemory.Card> cards = SearchReturn.cards(this);
+        java.util.List<MediaVoiceApps.App> apps = new ArrayList<>();
+        for (String id : SearchMemory.apps(cards)) {
+            MediaVoiceApps.App app = MediaVoiceApps.byId(id);
+            if (app != null) apps.add(app);
+        }
+        if (apps.isEmpty()) { search(query, ""); return; }
+        android.util.Log.w("tvsearch", "results restored from memory: " + cards.size());
+        activeQuery = query;
+        activeTarget = getSharedPreferences("search_return", 0).getString("target", "");
+        movieSearch = new MovieSearchView(this, query, apps, app -> searchInApp(query, app.id),
+                edited -> search(edited, activeTarget), cards, this::resumeListening);
+        setContentView(movieSearch);
+    }
+
+    /** What the launcher can do by itself: volume, mute, the picture menu, clock, weather, the input panel. */
+    private void act(VoiceActionCommand.Parsed action) {
+        android.util.Log.w("tvvoice", "action " + action.action() + " " + action.value());
+        switch (action.action()) {
+            case VOLUME_UP: case VOLUME_DOWN: case VOLUME_SET: case MUTE_ON: case MUTE_OFF:
+                volume(action); return;
+            case PICTURE_SETTINGS:
+                Toast.makeText(this, "Яркость картинки — в меню изображения", Toast.LENGTH_SHORT).show();
+                try {
+                    startActivity(SystemSettings.intent(this, android.provider.Settings.ACTION_DISPLAY_SETTINGS));
+                    finish();
+                } catch (RuntimeException unavailable) { fail(getString(R.string.not_available)); }
+                return;
+            case CLOCK:
+                try {
+                    startActivity(new Intent(this, ClockActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    finish();
+                } catch (RuntimeException unavailable) { fail(getString(R.string.not_available)); }
+                return;
+            case WEATHER:
+                WeatherSnapshot.Row row = WeatherSnapshot.read(this);
+                if (row == null) { fail("Погода: карточка ничего не прислала"); return; }
+                speak(WeatherSnapshot.speech(row)); return;
+            case INPUTS:
+                try {
+                    startActivity(new Intent("com.android.tv.action.VIEW_INPUTS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    finish();
+                } catch (RuntimeException unavailable) { fail(getString(R.string.not_available)); }
+                return;
+            default: return;
+        }
+    }
+
+    private void volume(VoiceActionCommand.Parsed action) {
+        android.media.AudioManager audio = getSystemService(android.media.AudioManager.class);
+        if (audio == null) { fail(getString(R.string.not_available)); return; }
+        int stream = android.media.AudioManager.STREAM_MUSIC;
+        if (action.action() == VoiceActionCommand.Action.VOLUME_SET) {
+            int index = Math.round(action.value() / 100f * audio.getStreamMaxVolume(stream));
+            audio.setStreamVolume(stream, index, android.media.AudioManager.FLAG_SHOW_UI);
+        } else {
+            int adjust = action.action() == VoiceActionCommand.Action.VOLUME_UP
+                    ? android.media.AudioManager.ADJUST_RAISE
+                    : action.action() == VoiceActionCommand.Action.VOLUME_DOWN
+                    ? android.media.AudioManager.ADJUST_LOWER
+                    : action.action() == VoiceActionCommand.Action.MUTE_ON
+                    ? android.media.AudioManager.ADJUST_MUTE : android.media.AudioManager.ADJUST_UNMUTE;
+            audio.adjustStreamVolume(stream, adjust, android.media.AudioManager.FLAG_SHOW_UI);
+        }
+        finish();
+    }
+
+    private android.speech.tts.TextToSpeech tts;
+
+    /** The weather line is spoken; where the TV has no voice for it, the same line shows as a message. */
+    private void speak(String text) {
+        if (tts == null) {
+            tts = new android.speech.tts.TextToSpeech(this, status -> {
+                if (status != android.speech.tts.TextToSpeech.SUCCESS) { Toast.makeText(this, text, Toast.LENGTH_LONG).show(); finish(); return; }
+                int language = tts.setLanguage(new Locale("ru"));
+                if (language == android.speech.tts.TextToSpeech.LANG_MISSING_DATA
+                        || language == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) {
+                    Toast.makeText(this, text, Toast.LENGTH_LONG).show(); finish(); return;
+                }
+                tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null);
+                timeout.postDelayed(this::finish, 5000);
+            });
+            return;
+        }
+        tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null);
+        timeout.postDelayed(this::finish, 5000);
     }
 
     @Override protected void onPause(){super.onPause();}
@@ -256,7 +403,7 @@ unavailable) { fail("Распознавание речи недоступно");
         }
         if (SiteSearch.supports(app)) { SiteSearch.open(this, app, query); return; }
         String activity = MediaSearch.searchActivity(this, app.pkg);
-        if (activity == null) { manualSearch(app, query); return; }
+        if (activity == null || !AppSearchEntry.searchActivityIsUsable(app.id)) { manualSearch(app, query); return; }
         try {
             SearchNavigation.open(this, new Intent(Intent.ACTION_SEARCH)
                     .setClassName(app.pkg, activity)
@@ -312,7 +459,9 @@ unavailable) { fail("Распознавание речи недоступно");
         timeout.removeCallbacksAndMessages(null);
         if (movieSearch != null) { movieSearch.close(); movieSearch = null; }
         if (tvMicrophone != null) tvMicrophone.close();
+        if (listening != null) listening.stopPulse();
         if (activeDialog != null) { activeDialog.dismiss(); activeDialog = null; }
+        if (tts != null) { tts.shutdown(); tts = null; }
         super.onDestroy();
     }
 
@@ -323,5 +472,38 @@ unavailable) { fail("Распознавание речи недоступно");
         catch (RuntimeException unavailable) { fail("Не удалось открыть приложение"); }
     }
 
-    private void fail(String message) { Toast.makeText(this, message, Toast.LENGTH_LONG).show(); finish(); }
+    /** The engine hands the words over only at the end of the session, so they are shown before the results. */
+    private void phrases(ArrayList<String> words) {
+        tvMicrophone = null;
+        if (listening == null) { route(words); return; }
+        listening.setHeard(String.join(" ", words));
+        timeout.postDelayed(() -> { if (!isFinishing() && !isDestroyed()) route(words); }, 800);
+    }
+
+    /** The engine can refuse the pipe source (ERROR_CLIENT on this firmware): plain session, then the window. */
+    private void captureError(String message) {
+        android.util.Log.w("tvvoice","capture error: "+message+" retries "+captureRetries);
+        if (!engineWindowAllowed(ownSession)) {
+            // The chosen path is our own session, so the Google window must not appear after our input:
+            // one more attempt with the same session, then the message.
+            if (captureRetries == 0) {
+                captureRetries = 1;
+                android.util.Log.w("tvvoice","retry own session");
+                if (listening != null) listening.setState("Слушаю снова");
+                startOwnSession(ownSessionMode, listenSeconds, listening);
+            } else fail(message);
+            return;
+        }
+        if (captureRetries == 0 && pipeAttempted) {
+            captureRetries = 1;
+            if (tvMicrophone == null) tvMicrophone = new TvMicrophoneInput();
+            android.util.Log.w("tvvoice","fallback to plain session (engine mic)");
+            tvMicrophone.startPlain(this, this::phrases, this::captureError, listenSeconds);
+            return;
+        }
+        if (captureRetries < 2) { captureRetries = 2; android.util.Log.w("tvvoice","fallback to engine window"); listen(); return; }
+        fail(message);
+    }
+
+    private void fail(String message) { android.util.Log.w("tvvoice","fail: "+message); Toast.makeText(this, message, Toast.LENGTH_LONG).show(); finish(); }
 }

@@ -61,11 +61,9 @@ public final class LauncherSettingsActivity extends Activity {
     private int dockOpacity;
     private boolean animations;
     private boolean advancedEffects;
-    /** Minutes of idle Home before the dimmer starts (dim_delay); 0 is off. */
-    private static final int[] DIM_DELAYS = {0, 1, 3, 5, 10, 15};
+    /** Minutes of idle Home before the dimmer starts (dim_delay); 0 is off, smooth 0..15 slider. */
     private int dimDelayMin;
-    /** How dark the dimmer goes, in percent (dim_level); the fade itself is fixed at three seconds. */
-    private static final int[] DIM_LEVELS = {30, 50, 80, 90};
+    /** How dark the dimmer goes, in percent (dim_level), chosen on a smooth 0..100 slider. */
     private int dimLevelPct;
     private TextView dimDelayChoice, dimRampChoice, weatherCityChoice;
     /** The clock over other apps: five presets, four corners, five sizes. */
@@ -179,9 +177,9 @@ public final class LauncherSettingsActivity extends Activity {
         }
         wallpaperChoice = findViewById(R.id.wallpaperChoice);
         wallpaperChoice.setOnClickListener(v -> showWallpaperPicker());
-        tileCropPercent = TileCrop.chosen(choices.getInt(Config.TILE_CROP_KEY, 0));
+        tileCropPercent = TileCrop.chosen(choices.getInt(Config.TILE_CROP_KEY, 1));
         tileCropChoice = findViewById(R.id.tileCropChoice);
-        tileCropChoice.setOnClickListener(v -> chooseSlider("Обрезка изображений плиток", 5,
+        tileCropChoice.setOnClickListener(v -> chooseSlider("Обрезка изображений плиток", 0, 5,
                 tileCropPercent, value -> {
                     tileCropPercent = value;
                     choices.edit().putInt(Config.TILE_CROP_KEY, value).apply();
@@ -198,18 +196,18 @@ public final class LauncherSettingsActivity extends Activity {
             refresh();
         });
         // The dimmer: when it starts and how long it takes. Any key on Home wakes it and restarts both.
-        dimDelayMin = choices.getInt(Config.DIM_DELAY_KEY, 0);
-        dimLevelPct = choices.getInt(Config.DIM_LEVEL_KEY, 50);
+        dimDelayMin = choices.getInt(Config.DIM_DELAY_KEY, 1);
+        dimLevelPct = choices.getInt(Config.DIM_LEVEL_KEY, 90);
         dimDelayChoice = findViewById(R.id.dimDelayChoice);
-        dimDelayChoice.setOnClickListener(v -> chooseValues("Затемнение через", DIM_DELAYS,
+        dimDelayChoice.setOnClickListener(v -> chooseSlider("Затемнение через", 0, 15,
                 dimDelayMin, value -> { dimDelayMin = value;
                     choices.edit().putInt(Config.DIM_DELAY_KEY, value).apply(); changed(); refresh(); }, " мин."));
         dimRampChoice = findViewById(R.id.dimRampChoice);
-        dimRampChoice.setOnClickListener(v -> chooseValues("Сила затемнения", DIM_LEVELS,
+        dimRampChoice.setOnClickListener(v -> chooseSlider("Сила затемнения", 0, 100,
                 dimLevelPct, value -> { dimLevelPct = value;
                     choices.edit().putInt(Config.DIM_LEVEL_KEY, value).apply(); changed(); refresh(); }, "%"));
         // The clock drawn over other apps: on/off, opacity, size and a D-pad placement.
-        clockOn = choices.getBoolean(Config.CLOCK_ON_KEY, false);
+        clockOn = choices.getBoolean(Config.CLOCK_ON_KEY, true);
         clockAlpha = choices.getInt(Config.CLOCK_ALPHA_KEY, 40);
         clockSize = choices.getInt(Config.CLOCK_SIZE_KEY, 10);
         clockFont = Math.max(0, indexOf(CLOCK_FONTS, choices.getString(Config.CLOCK_FONT_KEY, CLOCK_FONTS[0])));
@@ -221,10 +219,9 @@ public final class LauncherSettingsActivity extends Activity {
             refresh();
         });
         clockCornerChoice = findViewById(R.id.clockCornerChoice);
-        clockCornerChoice.setOnClickListener(v -> chooseValues("Непрозрачность часов",
-                new int[]{10,20,30,40,50,60,70,80,90,100}, clockAlpha, value -> {
-                    clockAlpha = value; choices.edit().putInt(Config.CLOCK_ALPHA_KEY, value).apply();
-                    notifyClockChanged(); refresh(); }, "%"));
+        clockCornerChoice.setOnClickListener(v -> chooseSlider("Непрозрачность часов", 0, 100, clockAlpha, value -> {
+            clockAlpha = value; choices.edit().putInt(Config.CLOCK_ALPHA_KEY, value).apply();
+            notifyClockChanged(); refresh(); }, "%"));
         clockSizeChoice = findViewById(R.id.clockSizeChoice);
         clockSizeChoice.setOnClickListener(v -> chooseValues("Размер часов", CLOCK_SIZES, clockSize, value -> {
             clockSize = value; choices.edit().putInt(Config.CLOCK_SIZE_KEY, value).apply();
@@ -233,7 +230,7 @@ public final class LauncherSettingsActivity extends Activity {
         clockFontChoice.setOnClickListener(v -> chooseList("Шрифт часов", CLOCK_FONT_NAMES, clockFont, which -> {
             clockFont = which; choices.edit().putString(Config.CLOCK_FONT_KEY, CLOCK_FONTS[which]).apply();
             clockInk.clear(); notifyClockChanged(); refresh(); }));
-        oledShift = choices.getBoolean(Config.OLED_SHIFT_KEY, false);
+        oledShift = choices.getBoolean(Config.OLED_SHIFT_KEY, true);
         String pictureKey = choices.getString(Config.PICTURE_KEY_KEY, "off");
         for (int i = 0; i < PICTURE_KEYS.length; i++) if (PICTURE_KEYS[i].equals(pictureKey)) pictureKeyIndex = i;
         oledShiftChoice = findViewById(R.id.oledShiftChoice);
@@ -258,7 +255,7 @@ public final class LauncherSettingsActivity extends Activity {
             refresh();
         });
         plateOpacityChoice = findViewById(R.id.plateOpacityChoice);
-        plateOpacityChoice.setOnClickListener(v -> chooseSlider("Прозрачность плашек",
+        plateOpacityChoice.setOnClickListener(v -> chooseSlider("Прозрачность плашек", 0,
                 100, 100 - plateOpacity, value -> {
                     plateOpacity = 100 - value;
                     choices.edit().putInt(Config.HEADER_PLATE_OPACITY_KEY, plateOpacity).apply();
@@ -266,7 +263,7 @@ public final class LauncherSettingsActivity extends Activity {
                     refresh();
                 }, "%"));
         plateBlurChoice = findViewById(R.id.plateBlurChoice);
-        plateBlurChoice.setOnClickListener(v -> chooseSlider("Размытие плашек",
+        plateBlurChoice.setOnClickListener(v -> chooseSlider("Размытие плашек", 0,
                 10, plateBlur, value -> {
                     plateBlur = value;
                     choices.edit().putInt(Config.HEADER_PLATE_BLUR_KEY, value).apply();
@@ -330,7 +327,7 @@ public final class LauncherSettingsActivity extends Activity {
         }).setNegativeButton(android.R.string.cancel, null).show();
     }
 
-    private void chooseSlider(String title, int maximum, int current,
+    void chooseSlider(String title, int minimum, int maximum, int current,
             java.util.function.IntConsumer selected, String unit) {
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -341,8 +338,9 @@ public final class LauncherSettingsActivity extends Activity {
         content.addView(label);
         android.widget.SeekBar slider = new android.widget.SeekBar(this);
         slider.setFocusableInTouchMode(true);
+        if (minimum > 0) slider.setMin(minimum);
         slider.setMax(maximum);
-        slider.setProgress(current);
+        slider.setProgress(Math.max(minimum, Math.min(maximum, current)));
         slider.setKeyProgressIncrement(1);
         content.addView(slider);
         slider.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {

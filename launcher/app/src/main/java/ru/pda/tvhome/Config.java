@@ -45,7 +45,7 @@ final class Config {
     static final String DOCK_OPACITY_KEY = "dock_opacity";
     /** Minutes of idle Home before the screen dims (launcher settings); 0 is off. */
     static final String DIM_DELAY_KEY = "dim_delay";
-    /** How dark the dimmer draws, percent 20..90 (launcher settings). */
+    /** How dark the dimmer draws, percent 0..100 chosen on a slider (launcher settings). */
     static final String DIM_LEVEL_KEY = "dim_level";
     /** OLED dimmer: pure black over a paused wallpaper instead of a translucent scrim (launcher settings). */
     static final String DIM_OLED_KEY = "dim_oled";

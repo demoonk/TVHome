@@ -247,7 +247,7 @@ public class HomeRedirectService extends AccessibilityService {
             return;
         }
         SharedPreferences prefs = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
-        if (!prefs.getBoolean(Config.CLOCK_ON_KEY, false)) {
+        if (!prefs.getBoolean(Config.CLOCK_ON_KEY, true)) {
             if (clockOverlay != null && clockOverlay.getParent() != null) windowManager().removeView(clockOverlay);
             return;
         }
@@ -334,7 +334,7 @@ public class HomeRedirectService extends AccessibilityService {
         if (now - lastShiftAt < 5 * 60_000L) return;
         lastShiftAt = now;
         boolean on = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
-                .getBoolean(Config.OLED_SHIFT_KEY, false);
+                .getBoolean(Config.OLED_SHIFT_KEY, true);
         int dx = on ? shiftRandom.nextInt(7) - 3 : 0;
         int dy = on ? shiftRandom.nextInt(7) - 3 : 0;
         if (dx == shiftDx && dy == shiftDy) return;

@@ -129,6 +129,7 @@
         <activity android:name=".SiteSearchActivity" android:exported="false" />
         <activity android:name="ru.pda.tvhome.WallpaperBrowserActivity" android:exported="false" />
         <activity android:name="ru.pda.tvhome.VoiceLaunchActivity" android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:launchMode="singleTask" android:excludeFromRecents="true" android:taskAffinity="${applicationId}.voice">
             <intent-filter>
                 <action android:name="android.intent.action.ASSIST" />

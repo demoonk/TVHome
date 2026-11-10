@@ -11,7 +11,7 @@ import java.util.*;
 final class WallpaperSource {
     static final String MODE="background_source", FILE="background_file", FOLDER="background_folder", MINUTES="background_minutes";
     static final String[] MODES={"Без обоев","Файл","Папка","Встроенные видеообои","Aerial Views"};
-    static final int[] INTERVALS={1,5,15,30};
+    // Rotation interval is a smooth 1..60 slider in the settings now; the old fixed interval list is gone.
     static final long TRANSITION_MS=3000;
     /** Safety limits for a recursive folder walk: a TV's storage can hold thousands of files. */
     static final int MAX_DEPTH=6, MAX_IMAGES=500;
@@ -25,7 +25,7 @@ final class WallpaperSource {
     static SharedPreferences prefs(Context c){return c.getSharedPreferences(Config.SETTINGS_NAME,0);}
     static String mode(Context c){return prefs(c).getString(MODE,"none");}
     static int modeIndex(Context c){return modeIndexOf(mode(c));}
-    static int minutes(Context c){int v=prefs(c).getInt(MINUTES,15);for(int valid:INTERVALS)if(valid==v)return v;return 15;}
+    static int minutes(Context c){int v=prefs(c).getInt(MINUTES,15);return Math.max(1,Math.min(60,v));}
     static void changed(Context c){SharedPreferences p=prefs(c);p.edit().putLong(Config.SETTINGS_REVISION_KEY,p.getLong(Config.SETTINGS_REVISION_KEY,0)+1).apply();}
     static void setMode(Context c,String value){prefs(c).edit().putString(MODE,value).apply();changed(c);}
 

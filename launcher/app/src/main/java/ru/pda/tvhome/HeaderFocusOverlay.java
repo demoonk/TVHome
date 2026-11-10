@@ -19,6 +19,7 @@ final class HeaderFocusOverlay extends View {
     private FrameLayout anchorRoot;
     private boolean anchorAnimated,anchorTileShape,forcePlacement;
     private float anchorRadiusDp = -1;
+    private float anchorPadDp = 3f;
     private final Matrix targetMatrix=new Matrix();
     private final RectF targetRect=new RectF();
     private final float[] goal=new float[5],lastGoal=new float[5];
@@ -46,12 +47,16 @@ final class HeaderFocusOverlay extends View {
     }
     void pointAt(View target, FrameLayout root, boolean animate) { pointAt(target, root, animate, false); }
     void pointAt(View target, FrameLayout root, boolean animate, boolean tileShape) {
-        anchorRadiusDp = -1;
+        anchorRadiusDp = -1; anchorPadDp = 3f;
         anchor=target;anchorRoot=root;anchorAnimated=animate;anchorTileShape=tileShape;forcePlacement=true;
         setVisibility(VISIBLE);alignAnchor();
     }
     void pointAtRounded(View target, FrameLayout root, boolean animate, float radiusDp) {
-        anchorRadiusDp=radiusDp;
+        pointAtRounded(target, root, animate, radiusDp, 3f);
+    }
+    /** The outset around the view, in dp: the top buttons get a tighter contour than the cards. */
+    void pointAtRounded(View target, FrameLayout root, boolean animate, float radiusDp, float padDp) {
+        anchorRadiusDp=radiusDp;anchorPadDp=padDp;
         anchor=target;anchorRoot=root;anchorAnimated=animate;forcePlacement=true;
         setVisibility(VISIBLE);alignAnchor();
     }
@@ -67,7 +72,7 @@ final class HeaderFocusOverlay extends View {
             current=parent;
         }
         targetRect.set(0,0,anchor.getWidth(),anchor.getHeight());targetMatrix.mapRect(targetRect);
-        float density=getResources().getDisplayMetrics().density,pad=3*density;
+        float density=getResources().getDisplayMetrics().density,pad=anchorPadDp*density;
         float scale=Math.min(targetRect.width()/anchor.getWidth(),targetRect.height()/anchor.getHeight());
         goal[0]=targetRect.left-pad;goal[1]=targetRect.top-pad;
         goal[2]=targetRect.width()+pad*2;goal[3]=targetRect.height()+pad*2;

@@ -73,9 +73,9 @@ public final class SleepTimer {
         return selectedMinutes(context) > 0 && deadline(context) > NONE;
     }
 
-    /** The chosen duration in minutes, 0 while the timer is off. */
+    /** The chosen duration in minutes, 0 while the timer is off. Default 15 — the value carried across the 2026-11-10 releases. */
     public static int selectedMinutes(Context context) {
-        return prefs(context).getInt(MINUTES, 0);
+        return prefs(context).getInt(MINUTES, 15);
     }
 
     /** Wall-clock deadline, NONE while nothing runs. */

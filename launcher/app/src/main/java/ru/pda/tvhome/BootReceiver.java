@@ -30,6 +30,11 @@ public final class BootReceiver extends BroadcastReceiver {
         if (!Intent.ACTION_BOOT_COMPLETED.equals(action)
                 && !"android.intent.action.QUICKBOOT_POWERON".equals(action)) return;
         OverlayService.start(context);
+        // A reboot leaves the assistant choice and the accessibility helpers behind: the shell-side guard is not
+        // running then, and the accessibility list is empty until something writes it. Home holds
+        // WRITE_SECURE_SETTINGS from the installer, so both are put back here before Home is opened.
+        AssistantChoice.restore(context);
+        if (Config.load(context).restoreKeyServices) ServiceRepair.restore(context);
         try {
             context.startActivity(new Intent(Intent.ACTION_MAIN)
                     .addCategory(Intent.CATEGORY_HOME)

@@ -164,7 +164,7 @@ public final class OverlayService extends Service {
     private void updateClock() {
         boolean onHome = getPackageName().equals(foreground)
                 && !foregroundClass.endsWith("LauncherSettingsActivity");
-        boolean enabled = prefs.getBoolean(Config.CLOCK_ON_KEY, false);
+        boolean enabled = prefs.getBoolean(Config.CLOCK_ON_KEY, true);
         if (onHome || !enabled) {
             removeClock();
             return;
@@ -253,7 +253,7 @@ public final class OverlayService extends Service {
     // ---- OLED shift ------------------------------------------------------------------------------
 
     private void oledShift() {
-        boolean on = prefs.getBoolean(Config.OLED_SHIFT_KEY, false);
+        boolean on = prefs.getBoolean(Config.OLED_SHIFT_KEY, true);
         shiftDx = on ? shiftRandom.nextInt(7) - 3 : 0;
         shiftDy = on ? shiftRandom.nextInt(7) - 3 : 0;
     }
@@ -341,7 +341,7 @@ public final class OverlayService extends Service {
     static void start(Context context) {
         try {
             SharedPreferences settings = context.getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
-            if (!settings.getBoolean(Config.CLOCK_ON_KEY, false) && !SleepTimer.armed(context)) {
+            if (!settings.getBoolean(Config.CLOCK_ON_KEY, true) && !SleepTimer.armed(context)) {
                 if (instance != null) context.stopService(new Intent(context, OverlayService.class));
                 return;
             }

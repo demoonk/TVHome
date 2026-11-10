@@ -17,11 +17,18 @@ public final class FreezableAppsTest {
         for(FreezableApps.Item item:FreezableApps.list())packages.add(item.pkg());
         assertTrue(packages.contains("com.mediatek.wwtv.setupwizard"));
         assertTrue(packages.contains("com.google.android.katniss"));
+        // The recovery stub is in the list because the Home key goes to it while it is enabled.
+        assertTrue(packages.contains("com.google.android.tungsten.setupwraith"));
+        // The stock shell is in the list: its gear menu doubled the launcher settings on the living-room TV.
+        assertTrue(packages.contains("com.mediatek.wwtv.tvcenter"));
+        // The factory key receiver is in the list by the owner's decision: the physical gear reaches it
+        // and it shows system settings next to the picture settings window.
+        assertTrue(packages.contains("com.homwee.factory"));
         assertFalse(packages.contains("com.android.managedprovisioning"));
     }
     @Test public void homeSettingsTunerKeyboardAndWebViewAreNeverFreezable(){
-        for(String key:new String[]{"ru.pda.tvhome","com.google.android.tungsten.setupwraith","com.android.tv.settings",
-                "com.mediatek.wwtv.tvcenter","com.mediatek.tvinput","com.google.android.inputmethod.latin",
+        for(String key:new String[]{"ru.pda.tvhome","com.android.tv.settings",
+                "com.mediatek.tvinput","com.google.android.inputmethod.latin",
                 "com.google.android.webview","com.google.android.tv.remote.service","com.android.statementservice"})
             assertFalse(key,FreezableApps.safe(key,"ru.pda.tvhome"));
     }
