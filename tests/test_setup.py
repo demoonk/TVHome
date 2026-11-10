@@ -73,6 +73,19 @@ if ($a -match 'settings put secure ru_pda_tvhome_assistant_request') {
  Set-Content "$env:SETUP_LOG.ack" $Arguments[-1]; exit 0
 }
 if ($a -match 'cat /data/local/tmp/assistant-package-guard.pid') { if ($env:SETUP_FAIL -eq 'guard-no-pid') { 'No such file'; exit 0 } '12345'; exit 0 }
+# Process table: the installer proves the guard is the process behind the pid in the file, not just that
+# the pid exists. A stale pid belongs to another program, so the identity check must fail.
+if ($a -match 'cat /proc/(?<pid>[0-9]+)/cmdline') {
+ $procPid = $Matches['pid']
+ if ($procPid -eq '12345') {
+  if ($env:SETUP_FAIL -eq 'guard-stale-pid') { 'app_process /system/bin' }
+  elseif ($env:SETUP_FAIL -eq 'guard-cmdline-unreadable') { exit 1 }
+  else { '/system/bin/sh /data/local/tmp/assistant-package-guard.sh' }
+  exit 0
+ }
+ 'app_process /system/bin --nice-name=pqtv-bridge PqRemoteProof /dev/input/event7 24 0'; exit 0
+}
+if ($a -match ' kill [0-9]+$') { exit 0 }
 if ($a -match 'ls -d /proc/') { 'ok'; exit 0 }
 if ($a -match 'settings get secure ru_pda_tvhome_assistant_ack') { Get-Content "$env:SETUP_LOG.ack"; exit 0 }
 if ($a -match 'settings put secure (assistant|voice_interaction_service|voice_recognition_service) ') {
@@ -231,6 +244,10 @@ class SetupTest(unittest.TestCase):
         self.assertIn('pm disable-user --user 0 com.mediatek.wwtv.setupwizard', calls)
         self.assertLess(calls.index('install -r'), calls.index('pm disable-user --user 0 com.mediatek.wwtv.setupwizard'))
         self.assertIn('Заморожено: com.mediatek.wwtv.setupwizard', result.stdout + result.stderr)
+        # The recovery stub has to be frozen before Home is checked, otherwise the Home key stays with it.
+        self.assertIn('pm disable-user --user 0 com.google.android.tungsten.setupwraith', calls)
+        self.assertLess(calls.index('set-home-activity'),
+                        calls.index('pm disable-user --user 0 com.google.android.tungsten.setupwraith'))
 
     def test_freeze_refused_for_protected_package(self):
         result, calls = self.scenario(named={'Freeze': ['com.android.systemui']})
@@ -248,6 +265,8 @@ class SetupTest(unittest.TestCase):
         result, calls = self.scenario('not-provisioned')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn('pm disable-user --user 0 com.mediatek.wwtv.setupwizard', calls)
+        # The recovery stub keeps HOME only while the setup wizard can still run.
+        self.assertNotIn('pm disable-user --user 0 com.google.android.tungsten.setupwraith', calls)
         self.assertIn('Первоначальная настройка прошивки не завершена', result.stdout + result.stderr)
 
     def test_dead_guard_fails_the_voice_choice(self):
@@ -263,6 +282,22 @@ class SetupTest(unittest.TestCase):
         result, calls = self.scenario('guard-no-pid')
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('не записал pid-файл', result.stdout + result.stderr)
+
+    def test_guard_pid_of_another_process_is_not_accepted(self):
+        # setsid forks, so the pid written to the file can belong to a different program. The installer reads
+        # the cmdline of that pid instead of trusting the exit code of ls, so a foreign process must fail.
+        result, calls = self.scenario('guard-stale-pid')
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('Помощник не запущен (pid 12345)', result.stdout + result.stderr)
+        self.assertGreaterEqual(calls.count('cat /proc/12345/cmdline 2>/dev/null'), 9)
+        self.assertNotIn('settings put secure ru_pda_tvhome_assistant_request', calls)
+
+    def test_guard_pid_with_unreadable_cmdline_is_not_accepted(self):
+        # A dead pid: cat fails, and the failure must not be mistaken for a running guard.
+        result, calls = self.scenario('guard-cmdline-unreadable')
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('Помощник не запущен (pid 12345)', result.stdout + result.stderr)
+        self.assertNotIn('settings put secure ru_pda_tvhome_assistant_request', calls)
 
     def test_hash_failure_stops_install(self):
         result, calls = self.scenario('hash')
@@ -366,7 +401,8 @@ class SetupTest(unittest.TestCase):
         self.assertIn('Данные выпуска: кэш', output)
         self.assertIn('TVHome-remote-2.0.3-longgear-test.dex', calls)
         self.assertIn('PqRemoteProof /dev/input/event7 24 0', calls)
-        self.assertNotIn('setupwraith', calls)
+        # The recovery stub is now part of the freeze list, so the Home key reaches TVHome.
+        self.assertIn('pm disable-user --user 0 com.google.android.tungsten.setupwraith', calls)
 
     def test_home_uses_foreground_when_start_omits_activity(self):
         result, calls = self.scenario('home-no-activity')
