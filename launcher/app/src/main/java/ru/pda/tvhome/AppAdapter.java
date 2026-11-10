@@ -211,7 +211,7 @@ public class AppAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
         this.ctx = ctx;
         tileCropPercent = TileCrop.chosen(ctx.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE)
-                .getInt(Config.TILE_CROP_KEY, 0));
+                .getInt(Config.TILE_CROP_KEY, 1));
         this.listener = listener;
         this.dockSize = dockSize;
         this.favourites = cfg.dockApps;

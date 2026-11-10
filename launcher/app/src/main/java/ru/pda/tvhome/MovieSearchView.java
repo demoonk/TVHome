@@ -1,6 +1,8 @@
 package ru.pda.tvhome;
 
 import android.app.Activity;
+import android.content.ComponentName;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -30,6 +32,8 @@ import java.util.function.Consumer;
 
 /** One independent, cancellable results row per app. No shared provider timeout. */
 final class MovieSearchView extends LinearLayout {
+    static final float HEADER_PAD_DP = 2f;   // the rubber contour around a header button
+    static final float CARD_PAD_DP = 3f;     // the rubber contour around a card
     private final Activity activity;
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService searches = Executors.newFixedThreadPool(3);
@@ -41,15 +45,28 @@ final class MovieSearchView extends LinearLayout {
     private volatile boolean closed;
     private android.widget.EditText queryInput;
     private final Consumer<MediaVoiceApps.App> openSearch;
+    private final Runnable voiceSearch;
     private final SearchFocusFrame focusFrame;
+    /** Cards of the previous search: Back from an app shows the same results screen again. */
+    private final List<SearchMemory.Card> stored;
+    private final List<SearchMemory.Card> saved = new ArrayList<>();
 
     String queryText() { return queryInput.getText().toString(); }
 
     MovieSearchView(Activity activity, String query, List<MediaVoiceApps.App> apps,
                     Consumer<MediaVoiceApps.App> openSearch, Consumer<String> submitQuery) {
+        this(activity, query, apps, openSearch, submitQuery, List.of(), () -> {});
+    }
+
+    MovieSearchView(Activity activity, String query, List<MediaVoiceApps.App> apps,
+                    Consumer<MediaVoiceApps.App> openSearch, Consumer<String> submitQuery,
+                    List<SearchMemory.Card> stored, Runnable voiceSearch) {
         super(activity);
         this.activity = activity;
         this.openSearch = openSearch;
+        this.voiceSearch = voiceSearch;
+        this.stored = stored;
+        saved.addAll(stored);
         setOrientation(VERTICAL);
         setBackgroundColor(Color.rgb(12, 17, 27));
         setPadding(dp(36), dp(24), dp(28), dp(12));
@@ -72,31 +89,59 @@ final class MovieSearchView extends LinearLayout {
         recognized.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
         recognized.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH);
         recognized.setContentDescription("Поисковый запрос");
+        // The default field background is a light plate: white text on it is unreadable.
+        recognized.setBackground(null);
         Runnable submit = () -> {
             String edited = queryText().trim();
             if (edited.isEmpty()) { recognized.setError("Введите запрос"); return; }
             android.view.inputmethod.InputMethodManager keyboard = activity.getSystemService(android.view.inputmethod.InputMethodManager.class);
             if (keyboard != null) keyboard.hideSoftInputFromWindow(recognized.getWindowToken(), 0);
+            android.util.Log.w("tvsearch","submit "+edited);
             submitQuery.accept(edited);
         };
         recognized.setOnEditorActionListener((view, action, event) -> {
-            if (action == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            if (action == 9 /* EditorInfo.IME_ACTION_SEARCH */
                     || event != null && event.getAction() == android.view.KeyEvent.ACTION_UP
                     && event.getKeyCode() == android.view.KeyEvent.KEYCODE_ENTER) { submit.run(); return true; }
             return false;
         });
+        // The remote's OK is delivered to the focused view. A text field only submits through the IME action,
+        // so OK on the field itself did nothing; the key is handled here as well.
+        recognized.setOnKeyListener((view, keyCode, event) -> {
+            if (isOkKey(keyCode) && event.getAction() == android.view.KeyEvent.ACTION_UP) { submit.run(); return true; }
+            return false;
+        });
+        // Focus on the field opens the keyboard: on this TV nothing can be typed without it.
+        recognized.setOnFocusChangeListener((view, focused) -> {
+            if (!focused) return;
+            android.view.inputmethod.InputMethodManager keyboard =
+                    activity.getSystemService(android.view.inputmethod.InputMethodManager.class);
+            if (keyboard == null) { android.util.Log.w("tvsearch", "no keyboard service on this device"); return; }
+            boolean shown = keyboard.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
+            if (!shown) shown = keyboard.showSoftInput(view, android.view.inputmethod.InputMethodManager.SHOW_FORCED);
+            android.util.Log.w("tvsearch", "keyboard on field focus: " + shown);
+        });
         recognized.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
         recognized.setMaxLines(2);
         header.addView(recognized, new LayoutParams(0, LayoutParams.WRAP_CONTENT, 1));
-        View find = iconAction("Найти", R.drawable.ic_search_action, submit);
+        // The header action is the microphone: OK on it goes back to listening instead of submitting text.
+        // The name stays `find` because the focus chain from the header to the first card uses it.
+        View find = iconAction("Голосовой поиск", R.drawable.ic_microphone, voiceSearch);
         header.addView(find, new LayoutParams(dp(48), dp(48)));
         View back = iconAction("Закрыть поиск", R.drawable.ic_search_exit, activity::finish);
         LayoutParams backParams = new LayoutParams(dp(48), dp(48));
         backParams.leftMargin = dp(12);
         header.addView(back, backParams);
         content.addView(header);
+        // A thin accent rule between the query and the results, so the header reads as its own block.
+        View rule = new View(activity);
+        GradientDrawable ruleShape = new GradientDrawable();
+        ruleShape.setColor(0x406EC1FF);
+        ruleShape.setCornerRadius(dp(1));
+        rule.setBackground(ruleShape);
+        content.addView(rule, new LayoutParams(LayoutParams.MATCH_PARENT, dp(2)));
         TextView hint = text("Фильмы и сериалы", 14, 0xff91a0b7);
-        hint.setPadding(0, dp(8), 0, dp(18));
+        hint.setPadding(0, dp(12), 0, dp(18));
         content.addView(hint);
         ScrollView scroll = new ScrollView(activity);
         scroll.setFillViewport(true);
@@ -116,7 +161,7 @@ final class MovieSearchView extends LinearLayout {
             LinearLayout section = new LinearLayout(activity);
             section.setOrientation(VERTICAL);
             section.setPadding(0, 0, 0, dp(22));
-            TextView name = text(app.label, 19, Color.WHITE);
+            TextView name = text(app.label, 19, 0xFF8FCEFF);
             name.setTypeface(null, Typeface.BOLD);
             section.addView(name);
             TextView status = text("Поиск…", 14, 0xff91a0b7);
@@ -139,6 +184,28 @@ final class MovieSearchView extends LinearLayout {
             });
             section.addView(horizontal);
             rows.addView(section);
+            List<SearchMemory.Card> remembered = SearchMemory.of(stored, app.id);
+            if (!remembered.isEmpty()) {
+                // The cards are already known: show them, without asking the provider again.
+                loading.setVisibility(View.GONE);
+                status.setText("Восстановлено из памяти · " + remembered.size());
+                for (SearchMemory.Card item : remembered) {
+                    View card = card(hitOf(item), app.label);
+                    card.setId(View.generateViewId());
+                    LayoutParams lp = new LayoutParams(dp(148), dp(254));
+                    lp.setMargins(0, 0, dp(14), 0);
+                    cards.addView(card, lp);
+                    if (rowOrder < firstResultRow[0]) {
+                        firstResultRow[0] = rowOrder;
+                        back.setNextFocusDownId(card.getId());
+                        find.setNextFocusDownId(card.getId());
+                        recognized.setNextFocusDownId(card.getId());
+                    }
+                }
+                addEntry(app, cards);
+                fitCards(horizontal, cards);
+                continue;
+            }
             if (!MediaSearch.canReadResults(activity, app)) {
                 loading.setVisibility(View.GONE);
                 status.setText("Результаты доступны внутри приложения");
@@ -167,6 +234,10 @@ final class MovieSearchView extends LinearLayout {
                         status.setText(hits.isEmpty() ? "Ничего не найдено" : "Найдено: " + hits.size());
                         if (hits.isEmpty()) addEntry(app, cards);
                         for (MediaSearch.Hit hit : hits) {
+                            saved.add(new SearchMemory.Card(app.id, hit.title, hit.description, hit.poster,
+                                    hit.intent.getAction(),
+                                    hit.intent.getComponent() == null ? "" : hit.intent.getComponent().flattenToString(),
+                                    hit.intent.getDataString() == null ? "" : hit.intent.getDataString()));
                             View card = card(hit, app.label);
                             card.setId(View.generateViewId());
                             LayoutParams lp = new LayoutParams(dp(148), dp(254));
@@ -179,6 +250,7 @@ final class MovieSearchView extends LinearLayout {
                                 recognized.setNextFocusDownId(card.getId());
                             }
                         }
+                        SearchReturn.remember(activity, query, saved);
                         fitCards(horizontal, cards);
                         // Earlier rows may complete later. Keep the user's selected card visible.
                         main.post(() -> {
@@ -219,6 +291,9 @@ final class MovieSearchView extends LinearLayout {
         }
     }
 
+    /** Keys that mean OK on this remote: DPAD_CENTER(23), ENTER(66), NUMPAD_ENTER(90), BUTTON_A(98). The numbers are the framework constants, so the rule stays testable on plain JVM. */
+    static boolean isOkKey(int key) { return key == 23 || key == 66 || key == 90 || key == 98; }
+
     private View card(MediaSearch.Hit hit, String appName) {
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(VERTICAL);
@@ -228,6 +303,14 @@ final class MovieSearchView extends LinearLayout {
         card.setContentDescription(hit.label + ", " + appName);
         decorate(card);
         android.widget.FrameLayout cover = new android.widget.FrameLayout(activity);
+        // The cover is clipped to its own rounded outline, so the poster reads as part of the plate,
+        // not as a square picture glued onto a rounded card.
+        cover.setClipToOutline(true);
+        cover.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override public void getOutline(View view, android.graphics.Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(8));
+            }
+        });
         TextView placeholder = text(hit.title, 19, 0xff9cacc4);
         placeholder.setGravity(Gravity.CENTER);
         placeholder.setMaxLines(4);
@@ -249,17 +332,28 @@ final class MovieSearchView extends LinearLayout {
             card.addView(description);
         }
         card.setOnKeyListener((v,key,event)->{
-            if(key!=android.view.KeyEvent.KEYCODE_DPAD_CENTER&&key!=android.view.KeyEvent.KEYCODE_ENTER&&key!=android.view.KeyEvent.KEYCODE_NUMPAD_ENTER&&key!=android.view.KeyEvent.KEYCODE_BUTTON_A)return false;
+            if(!isOkKey(key)){
+                // Arrows navigate; anything else that arrives on a card is logged, because what the remote
+                // really sends for OK can only be decided on the device.
+                if(key!=android.view.KeyEvent.KEYCODE_DPAD_LEFT&&key!=android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                        &&key!=android.view.KeyEvent.KEYCODE_DPAD_UP&&key!=android.view.KeyEvent.KEYCODE_DPAD_DOWN)
+                    android.util.Log.w("tvkeys","card key "+key+" scan "+event.getScanCode());
+                return false;
+            }
             if(event.getAction()==android.view.KeyEvent.ACTION_UP&&!event.isCanceled())v.performClick();
             return true;
         });
         card.setOnClickListener(v -> {
             try {
+                android.util.Log.w("tvsearch", "card click " + appName + " " + hit.intent);
                 // Keep the launch in the actual user click; an animation callback is too late on some TV firmwares.
                 SearchNavigation.open(activity, hit.intent);
                 activity.overridePendingTransition(0,0);
             }
-            catch (RuntimeException unavailable) { Toast.makeText(activity, "Не удалось открыть в " + appName, Toast.LENGTH_SHORT).show(); }
+            catch (RuntimeException unavailable) {
+                android.util.Log.w("tvsearch", "card open failed: " + unavailable);
+                Toast.makeText(activity, "Не удалось открыть в " + appName, Toast.LENGTH_SHORT).show();
+            }
         });
         if (hit.poster != null && !hit.poster.isEmpty()) {
             android.widget.ProgressBar loading = spinner();
@@ -268,6 +362,18 @@ final class MovieSearchView extends LinearLayout {
             loadPoster(image, hit.poster, loading);
         }
         return card;
+    }
+
+    /** A stored card, rebuilt as a hit so the same card view and the same click are used. */
+    private MediaSearch.Hit hitOf(SearchMemory.Card item) {
+        Intent intent = new Intent(item.action().isEmpty() ? Intent.ACTION_VIEW : item.action());
+        if (!item.data().isEmpty()) intent.setData(Uri.parse(item.data()));
+        if (!item.component().isEmpty()) {
+            ComponentName name = ComponentName.unflattenFromString(item.component());
+            if (name != null) intent.setComponent(name);
+        }
+        return new MediaSearch.Hit(item.title(), item.description(), item.poster(),
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 
     private void loadPoster(ImageView view, String address, View loading) {
@@ -350,7 +456,8 @@ final class MovieSearchView extends LinearLayout {
         view.setImageTintList(tint);
         view.setContentDescription(label);
         view.setFocusable(true); view.setClickable(true);
-        focusFrame.track(view, 24);
+        // At density 2.0 this is 4 px tighter than the contour around a card.
+        focusFrame.track(view, 24, HEADER_PAD_DP);
         view.setOnClickListener(v -> click.run());
         return view;
     }
@@ -358,7 +465,8 @@ final class MovieSearchView extends LinearLayout {
     private void addEntry(MediaVoiceApps.App app, LinearLayout cards) {
         if (closed || cards.getChildCount() > 0) return;
         boolean inAppSearch = AppSearchEntry.base(app.id) != null || SiteSearch.supports(app)
-                || MediaSearch.searchActivity(activity, app.pkg) != null;
+                || (MediaSearch.searchActivity(activity, app.pkg) != null
+                    && AppSearchEntry.searchActivityIsUsable(app.id));
         cards.addView(action(AppSearchEntry.buttonLabel(app, inAppSearch), () -> openSearch.accept(app)),
                 new LayoutParams(dp(270), dp(64)));
     }
@@ -372,7 +480,7 @@ final class MovieSearchView extends LinearLayout {
     }
     private void decorate(View view) {
         view.setBackground(background());
-        focusFrame.track(view, 12);
+        focusFrame.track(view, 12, CARD_PAD_DP);
     }
     private GradientDrawable background() {
         GradientDrawable shape = new GradientDrawable();

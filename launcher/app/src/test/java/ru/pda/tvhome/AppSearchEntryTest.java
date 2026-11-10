@@ -11,6 +11,9 @@ public final class AppSearchEntryTest {
                 AppSearchEntry.searchUrl("smarttube", "avatar"));
         assertEquals("https://www.youtube.com/results?search_query=avatar",
                 AppSearchEntry.searchUrl("tizentube", "avatar"));
+        assertEquals("https://www.youtube.com/results?search_query=avatar",
+                AppSearchEntry.searchUrl("youtube", "avatar"));
+        assertEquals("https://vkplay.live/search?query=avatar", AppSearchEntry.searchUrl("boosty", "avatar"));
         assertEquals("vkvideo://vk.com/search?query=", AppSearchEntry.searchUrl("vk", ""));
     }
     @Test public void encodesTheQueryWithoutLeavingPlusSigns(){
@@ -22,8 +25,9 @@ public final class AppSearchEntryTest {
         assertNull(AppSearchEntry.searchUrl("kinopoisk", "avatar"));
         assertNull(AppSearchEntry.searchUrl("rutube", "avatar"));
         assertNull(AppSearchEntry.searchUrl("lift", "avatar"));
-        assertNull(AppSearchEntry.searchUrl("boosty", "avatar"));
         assertNull(AppSearchEntry.searchUrl("mpv", "avatar"));
+        assertNull(AppSearchEntry.searchUrl("kion", "avatar"));
+        assertNull(AppSearchEntry.searchUrl("vimu", "avatar"));
     }
     @Test public void buttonPromisesSearchOnlyWhereItIsReachable(){
         assertEquals("Искать в VK Видео", AppSearchEntry.buttonLabel(new MediaVoiceApps.App("vk","VK Видео","com.vk.tv","deeplink"), false));
@@ -33,5 +37,11 @@ public final class AppSearchEntryTest {
         assertEquals("Открыть Vimu", AppSearchEntry.buttonLabel(new MediaVoiceApps.App("vimu","Vimu","net.gtvbox.videoplayer","provider"), false));
         assertEquals("Открыть Кинопоиск", AppSearchEntry.buttonLabel(new MediaVoiceApps.App("kinopoisk","Кинопоиск","ru.kinopoisk.tv","provider"), false));
         assertEquals("Открыть Lift", AppSearchEntry.buttonLabel(new MediaVoiceApps.App("lift","Lift","io.lift.app","manual"), false));
+    }
+    @Test public void kionIsOfferedAsOpenBecauseItsSearchActivityStaysBlackOnThisTv(){
+        assertFalse(AppSearchEntry.searchActivityIsUsable("kion"));
+        assertTrue(AppSearchEntry.searchActivityIsUsable("vimu"));
+        assertEquals("Открыть КИОН / МТС ТВ",
+                AppSearchEntry.buttonLabel(new MediaVoiceApps.App("kion","КИОН / МТС ТВ","ru.mts.mtstv","provider"), true));
     }
 }

@@ -93,8 +93,9 @@ final class MediaSearch {
     }
     static boolean canReadResults(Context context, MediaVoiceApps.App app) {
         if (SiteSearch.supports(app)) return true;
-        if ("deeplink".equals(app.mode) || "manual".equals(app.mode) || "reshala".equals(app.mode)) return false;
-        if ("num".equals(app.id)) return readable(context, "ru.yourok.num.atvsearch", "/search/search_suggest_query");
+        String ruleAuthority = SearchCardRules.authority(app.id);
+        if (ruleAuthority != null) return readable(context, ruleAuthority, SearchCardRules.path(app.id));
+        if ("deeplink".equals(app.mode) || "manual".equals(app.mode)) return false;
         SearchableInfo info = searchable(context, app.pkg);
         if (info == null) return false;
         return readable(context, info.getSuggestAuthority(),
@@ -103,7 +104,8 @@ final class MediaSearch {
     static List<Hit> find(Context context, MediaVoiceApps.App app, String query, CancellationSignal signal) {
         if (SiteSearch.supports(app)) return SiteSearch.find(context,app,query,signal);
         SearchableInfo searchable = null;
-        if (!"num".equals(app.id)) {
+        String ruleAuthority = SearchCardRules.authority(app.id);
+        if (ruleAuthority == null) {
             searchable = searchable(context, app.pkg);
             if (searchable == null) throw new IllegalStateException("Search unavailable");
         }
@@ -111,7 +113,8 @@ final class MediaSearch {
         String selection = null;
         String[] args = null;
         if (searchable == null) {
-            uri = Uri.parse("content://ru.yourok.num.atvsearch/search/search_suggest_query").buildUpon().appendPath(query);
+            uri = new Uri.Builder().scheme("content").authority(ruleAuthority)
+                    .appendEncodedPath(SearchCardRules.path(app.id).substring(1)).appendPath(query);
         } else {
             uri = new Uri.Builder().scheme("content").authority(searchable.getSuggestAuthority());
             if (searchable.getSuggestPath() != null) uri.appendEncodedPath(searchable.getSuggestPath());
@@ -127,28 +130,28 @@ final class MediaSearch {
                 String title = column(cursor, SearchManager.SUGGEST_COLUMN_TEXT_1);
                 if (title == null || title.isEmpty()) continue;
                 String description = column(cursor, SearchManager.SUGGEST_COLUMN_TEXT_2);
+                String data = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_DATA);
+                String dataId = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID);
+                String extra = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA);
                 Intent intent;
-                if (searchable == null) {
-                    String id = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID);
-                    String type = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA);
-                    if (id == null || !id.matches("[0-9]+") || !("movie".equals(type) || "tv".equals(type))) continue;
-                    intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.themoviedb.org/" + type + "/" + id)).setPackage(app.pkg);
-                } else {
+                String target = SearchCardRules.cardUrl(app.id, data, dataId, extra);
+                if (target != null) {
+                    intent = new Intent(Intent.ACTION_VIEW, Uri.parse(target)).setPackage(app.pkg);
+                } else if (searchable != null) {
                     String action = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_ACTION);
                     if (action == null) action = searchable.getSuggestIntentAction();
                     if (action == null) action = Intent.ACTION_SEARCH;
-                    String data = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_DATA);
                     if (data == null) data = searchable.getSuggestIntentData();
-                    String id = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_DATA_ID);
-                    if (data != null && id != null) data = data + "/" + Uri.encode(id);
+                    if (data != null && dataId != null) data = data + "/" + Uri.encode(dataId);
                     intent = new Intent(action).setComponent(searchable.getSearchActivity())
                             .putExtra(SearchManager.USER_QUERY, query);
                     if (data != null) intent.setData(Uri.parse(data));
-                    String extra = column(cursor, SearchManager.SUGGEST_COLUMN_INTENT_EXTRA_DATA);
-                    if (extra != null) intent.putExtra(SearchManager.EXTRA_DATA_KEY, extra);
+                    // With no data the app reads the row identifier from the extra, as its own search UI does.
+                    else if (extra != null) intent.putExtra(SearchManager.EXTRA_DATA_KEY, extra);
+                    else if (dataId != null) intent.putExtra(SearchManager.EXTRA_DATA_KEY, dataId);
                     String resultQuery = column(cursor, SearchManager.SUGGEST_COLUMN_QUERY);
                     intent.putExtra(SearchManager.QUERY, resultQuery == null ? query : resultQuery);
-                }
+                } else continue;
                 String poster = column(cursor, "suggest_result_card_image");
                 if (poster == null) poster = column(cursor, SearchManager.SUGGEST_COLUMN_ICON_1);
                 String year = column(cursor, "suggest_production_year");

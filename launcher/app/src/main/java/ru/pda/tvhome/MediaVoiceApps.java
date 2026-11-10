@@ -22,6 +22,11 @@ final class MediaVoiceApps {
         new App("vimu", "Vimu", "net.gtvbox.videoplayer", "provider", "виму", "vimu", "плеер"),
         new App("mpv", "mpv", "is.xyz.mpv", "manual", "мпв", "эмпиви", "mpv"),
         new App("tizentube", "TizenTube", "io.gh.reisxd.tizentube.cobalt", "youtube", "тайзентуб", "тайзентубе", "тизентуб", "тизентубе", "tizentube"),
+        // The preinstalled YouTube TV app has no search provider and no exported ACTION_SEARCH handler,
+        // so it can only be reached through the results URL it declares for itself. Spoken "ютуб" stays
+        // SmartTube as agreed earlier; this row is reached by its name or by picking it in the fan.
+        new App("youtube", "YouTube", "com.google.android.youtube.tv", "youtube",
+                "youtubetv", "ютубтв", "штатныйютуб", "стандартныйютуб"),
         new App("boosty", "VK Видео Live / Boosty", "live.vkplay.app", "manual", "бусти", "boosty", "вкплей", "вклайв", "vkplay", "vkplaylive")
     };
     static App byId(String id) {
