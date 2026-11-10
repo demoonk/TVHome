@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The TV banner: the gear key this add-on keeps alive. Drawn for this add-on, no third-party art. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp" android:height="180dp"
+    android:viewportWidth="320" android:viewportHeight="180">
+    <path android:fillColor="#FF14171C" android:pathData="M0,0h320v180h-320z" />
+    <path android:strokeColor="#FF6FA8DC" android:strokeWidth="14" android:strokeLineCap="round"
+        android:pathData="M160,90m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0" />
+    <path android:strokeColor="#FF6FA8DC" android:strokeWidth="12" android:strokeLineCap="round"
+        android:pathData="M205,90h17 M192,122l12,12 M160,135v17 M128,122l-12,12 M115,90H98 M128,58l-12,-12 M160,45V28 M192,58l12,-12" />
+    <path android:fillColor="#FF6FA8DC" android:pathData="M160,90m-11,0a11,11 0,1 1,22 0a11,11 0,1 1,-22 0" />
+</vector>

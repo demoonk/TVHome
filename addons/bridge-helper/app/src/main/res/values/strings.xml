@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Name in the system app list; nothing on screen otherwise. -->
+    <string name="app_name">Bridge helper</string>
+    <string name="status_pending">Одно подключение, одна команда, ограниченное ожидание…</string>
+</resources>
