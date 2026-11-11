@@ -174,7 +174,11 @@ final class SettingsColumns {
             android.content.SharedPreferences p=activity.getSharedPreferences(Config.SETTINGS_NAME,0);
             boolean auto=BridgeTrigger.auto(p);
             boolean installed=new BridgeTrigger().helperInstalled(activity);
-            list.addView(caption("Мост ловит шестерёнку с пульта. Запустить его может только ADB-помощник на ТВ, потому что события пульта читает shell-домен. Помощник "+(installed?"установлен":"не установлен")+". По умолчанию загрузка ручная: лаунчер ничего не запускает сам."));
+            list.addView(caption(installed
+                    ? "Мост ловит шестерёнку с пульта. Запустить его может только ADB-помощник на ТВ, потому что события пульта читает shell-домен. Помощник установлен. " + (auto
+                        ? "Сейчас «При старте Home»: после загрузки лаунчера помощник запустит мост. После каждой перезагрузки ТВ один раз подтвердите разрешение ADB — мост запустится сам."
+                        : "Сейчас загрузка ручная: лаунчер ничего не запускает сам, нажмите «Запросить загрузку сейчас».")
+                    : "Мост ловит шестерёнку с пульта. Запустить его может только ADB-помощник на ТВ, потому что события пульта читает shell-домен. Помощник не установлен: установите аддон bridge-helper из релиза, иначе мост не запустится."));
             list.addView(row("Загрузка моста",BridgeTrigger.MODES[BridgeTrigger.modeIndex(auto)],true,()->choose("Загрузка моста",BridgeTrigger.MODES,BridgeTrigger.modeIndex(auto),i->{
                 android.content.SharedPreferences s=activity.getSharedPreferences(Config.SETTINGS_NAME,0);
                 s.edit().putBoolean(BridgeTrigger.AUTO_KEY,i==1).putLong(Config.SETTINGS_REVISION_KEY,s.getLong(Config.SETTINGS_REVISION_KEY,0)+1).apply();

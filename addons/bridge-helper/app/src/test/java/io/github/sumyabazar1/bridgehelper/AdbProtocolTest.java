@@ -62,15 +62,23 @@ public class AdbProtocolTest {
     }
 
     @Test
-    public void theKeyIsSentInAdbsFrameTypeAndTheSignatureInTheAnswerToTheChallenge() {
-        // adb numbers them 1, 2, 3; this adbd answers the key frame with the challenge as type 1, so the key and the
-        // challenge share the value, while the signature must go out as 3 — as 2 it is not the answer adb expects.
-        assertEquals(1, AdbProtocol.AUTH_FIRST);
-        assertEquals(3, AdbProtocol.AUTH_SIGNATURE);
-        byte[] keyFrame = AdbProtocol.frame("AUTH", AdbProtocol.AUTH_FIRST, 0,
+    public void theSignatureIsSentAsTypeTwoAndTheKeyAsTypeThree() {
+        // adb numbers them 1, 2, 3: the server's challenge is 1, the client's signature is 2, the client's key string
+        // is 3. The build before 1.7 had 1 and 3 swapped; adbd then read the 256-byte signature as a public key,
+        // the framework logged "error doing base64 decoding", and the real key was never authorized.
+        assertEquals(1, AdbProtocol.AUTH_TOKEN);
+        assertEquals(2, AdbProtocol.AUTH_SIGNATURE);
+        assertEquals(3, AdbProtocol.AUTH_RSAPUBLICKEY);
+
+        byte[] signatureFrame = AdbProtocol.frame("AUTH", AdbProtocol.AUTH_SIGNATURE, 0, new byte[256]);
+        assertEquals("AUTH", new String(signatureFrame, 0, 4, StandardCharsets.US_ASCII));
+        assertEquals(2, AdbProtocol.le32(signatureFrame, 4));
+        assertEquals(256, AdbProtocol.le32(signatureFrame, 12));
+
+        byte[] keyFrame = AdbProtocol.frame("AUTH", AdbProtocol.AUTH_RSAPUBLICKEY, 0,
                 "QAAA demOOn@HOMEPC".getBytes(StandardCharsets.UTF_8));
         assertEquals("AUTH", new String(keyFrame, 0, 4, StandardCharsets.US_ASCII));
-        assertEquals(1, AdbProtocol.le32(keyFrame, 4));
+        assertEquals(3, AdbProtocol.le32(keyFrame, 4));
     }
 
     @Test

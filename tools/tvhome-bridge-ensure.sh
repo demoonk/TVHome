@@ -25,6 +25,11 @@ if [ "$guard_alive" = 1 ]; then
   echo "guard already running" >>"$ENSURE_LOG"
 else
   setsid sh "$GUARD" >>$TMP/assistant-package-guard.log 2>&1 </dev/null &
+  # adbd tears this shell down, and its process group with it, as soon as the command returns. setsid
+  # needs this shell to stay alive for a moment to leave that group: when the helper closes the
+  # connection right after CLSE (the 1.7 client reads it; the earlier build waited for a read timeout)
+  # the guard was killed before it wrote even its pid (seen on 2026-11-11). One second is enough.
+  sleep 1
   echo "guard started" >>"$ENSURE_LOG"
 fi
 exit 0

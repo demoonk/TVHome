@@ -22,15 +22,21 @@ public final class AdbProtocol {
     public static final int MAX_DATA = 0x100000;
 
     /**
-     * The AUTH types. adb numbers them 1, 2, 3: the client's key string goes out as AUTH_FIRST, the server answers
-     * with a 20-byte token, the signature back is AUTH_SIGNATURE. On this TV the token arrives as type 1, so the key
-     * and the token share that value. What matters is that the key is sent in the frame adbd records it from: sent as
-     * type 3, adbd reads it as a signature for a key it never recorded, answers "Invalid base64 key" with an empty
-     * key, and asks again — that is the repeated authorization dialog.
+     * The AUTH types exactly as adb numbers them, and as this adbd understands them:
+     *   1 ({@link #AUTH_TOKEN}) is a challenge from adbd, a 20-byte token;
+     *   2 ({@link #AUTH_SIGNATURE}) is the client's signature over that token;
+     *   3 ({@link #AUTH_RSAPUBLICKEY}) is the client's key string, which makes adbd ask the user.
+     *
+     * The build before 1.7 had the two client frames swapped: the key went out as type 1 (which adbd ignores) and
+     * the 256-byte signature as type 3 (which adbd reads as the public key). adbd then showed the signature in the
+     * dialog, the framework failed with "error doing base64 decoding", an Allow stored those binary bytes in
+     * adb_keys, and the real key was never authorized. That is why every connection asked again and the bridge did
+     * not start after a reboot on the living-room TV (2026-11-11). The standard order is the one above; there is no
+     * per-device numbering to adapt to.
      */
-    public static final int AUTH_FIRST = 1;      // the frame adbd records the key from
-    public static final int AUTH_TOKEN = 1;      // the same value: this adbd sends the challenge as type 1
-    public static final int AUTH_SIGNATURE = 3;  // as adb numbers the answer to the challenge
+    public static final int AUTH_TOKEN = 1;
+    public static final int AUTH_SIGNATURE = 2;
+    public static final int AUTH_RSAPUBLICKEY = 3;
 
     private AdbProtocol() {}
 

@@ -55,3 +55,4 @@ $started = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'am', 'start', '-W', 
 Write-Output $started
 if ($started -match '(?im)^Error:|Exception') { throw 'APK installed but TVHome could not start' }
 Write-Output 'TVHome installed. Select the default Home in system Settings if needed. App data was preserved by install -r.'
+Write-Output 'Gear bridge (optional): install bridge-helper-<version>.apk from the release, then set TVHome Settings → «Система» → «Загрузка моста» to «При старте Home». After every TV reboot allow ADB debugging once (about 30-40 seconds after Home appears); the bridge then starts by itself.'

@@ -23,6 +23,21 @@ final class BridgeTrigger {
     static final String AUTO_KEY = "bridge_auto_load";
     static final String[] MODES = {"Вручную", "При старте Home"};
 
+    /**
+     * How long after the first drawn frame Home waits before asking the helper. The first frame is only the first
+     * paint: the tiles, the wallpaper and the remote focus are still settling, and at boot the whole system is
+     * loaded. Asking straight from that frame put the ADB authorization dialog over a launcher that was not ready
+     * yet (living-room TV, 2026-11-11), so the owner could not tick «Всегда разрешать». This delay gives the
+     * launcher time to finish loading and the owner time to pick up the remote.
+     */
+    static final long ASK_DELAY_MS = 30000;
+
+    /** While Home is not usable yet (not focused or tiles still loading), wait and retry rather than ask. */
+    static final long ASK_RETRY_MS = 3000;
+
+    /** The retry attempts are bounded so a Home that never gains focus does not keep the ask scheduled forever. */
+    static final int ASK_MAX_RETRIES = 20;
+
     /** Loading is manual until the row turns it on: nothing on the TV runs without a press. */
     static boolean autoDefault() {
         return false;

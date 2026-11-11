@@ -238,8 +238,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     };
     /** The pills have been filled in once; later resumes refresh them after the first frame. */
     private boolean pillsShown;
-    /** Home asks the on-device helper for the gear bridge once per start, after the first frame is drawn. */
-    private final BridgeTrigger bridgeTrigger = new BridgeTrigger();
+    /** Home asks the on-device helper for the gear bridge once per process, after the first frame is drawn. */
+    private static final BridgeTrigger bridgeTrigger = new BridgeTrigger();
     private TextView shamsiDate;
     private TextView stats;
     private List<RaceWeekend.Race> raceCalendar;
@@ -2995,24 +2995,44 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * BOOT_COMPLETED it often had not. Only the shell domain reads /dev/input, so the launcher cannot start the
      * bridge itself; the helper connects to adbd with the key the TV already recorded and runs the ensure script,
      * and the guard keeps the bridge running.
+     *
+     * The ask itself waits {@link BridgeTrigger#ASK_DELAY_MS} after that frame: the first frame is only the first
+     * paint, and at boot the ADB authorization dialog appeared over a Home that was still loading, before the owner
+     * could tick «Всегда разрешать» (living-room TV, 2026-11-11). The delayed ask also waits until Home is focused and
+     * its tiles are loaded, retrying instead of spending the one ask.
      */
     private void askBridgeAfterFirstDraw() {
         if (!BridgeTrigger.auto(getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE))) return;
         if (!BridgeTrigger.canAsk(bridgeTrigger.helperInstalled(this))) return;
-        if (!bridgeTrigger.shouldAsk()) return;
         root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
             public boolean onPreDraw() {
                 root.getViewTreeObserver().removeOnPreDrawListener(this);
                 // Posted from inside the frame's traversal, so it runs after that frame is drawn.
-                handler.post(() -> {
-                    if (isDestroyed()) return;
-                    bridgeTrigger.ask(MainActivity.this);
-                });
+                handler.postDelayed(() -> maybeAskBridge(0), BridgeTrigger.ASK_DELAY_MS);
                 return true;
             }
         });
-        root.invalidate();   // a resume that changes nothing on screen still draws once, so the ask runs
+        root.invalidate();   // a resume that changes nothing on screen still draws once, so the ask is scheduled
+    }
+
+    /**
+     * One ask per process: if Home is not usable yet — still loading tiles or not in the foreground — wait and retry
+     * instead of asking from a screen the owner cannot use yet. The settings row and the helper are re-checked here,
+     * so turning the mode off during the delay cancels the ask.
+     */
+    private void maybeAskBridge(int retry) {
+        if (isDestroyed() || isFinishing()) return;
+        if (!BridgeTrigger.auto(getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE))) return;
+        if (!BridgeTrigger.canAsk(bridgeTrigger.helperInstalled(this))) return;
+        if (!tilesReady || !hasWindowFocus()) {
+            if (retry < BridgeTrigger.ASK_MAX_RETRIES) {
+                handler.postDelayed(() -> maybeAskBridge(retry + 1), BridgeTrigger.ASK_RETRY_MS);
+            }
+            return;
+        }
+        if (!bridgeTrigger.shouldAsk()) return;
+        bridgeTrigger.ask(this);
     }
 
     /** Shows the Wi-Fi network name on the button when we can read it, otherwise the connection type. */

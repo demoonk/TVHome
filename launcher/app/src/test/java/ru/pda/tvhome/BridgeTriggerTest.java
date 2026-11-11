@@ -38,6 +38,15 @@ public class BridgeTriggerTest {
         assertEquals("io.github.sumyabazar1.bridgehelper.action.ENSURE", BridgeTrigger.ACTION);
     }
 
+    @Test public void theAskWaitsForHomeToFinishLoading() {
+        // At boot the ADB authorization dialog appeared over a Home that was still loading, so the owner could not
+        // tick «Всегда разрешать» in time (living-room TV, 2026-11-11). The ask is delayed and retried until Home is
+        // usable instead of being sent from the first drawn frame.
+        assertTrue(BridgeTrigger.ASK_DELAY_MS >= 20000);
+        assertTrue(BridgeTrigger.ASK_RETRY_MS > 0);
+        assertTrue(BridgeTrigger.ASK_MAX_RETRIES > 0);
+    }
+
     @Test public void aSecondHomeInstanceAsksAgainForItself() {
         BridgeTrigger first = new BridgeTrigger();
         BridgeTrigger second = new BridgeTrigger();

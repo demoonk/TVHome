@@ -41,3 +41,4 @@ started=$("$adb" -s "$device" shell am start -W -a android.intent.action.MAIN -c
 printf '%s\n' "$started"
 if printf '%s\n' "$started" | grep -Ei '^Error:|Exception' >/dev/null; then echo 'APK installed but TVHome could not start' >&2; exit 1; fi
 echo 'TVHome installed. Select the default Home in system Settings if needed. App data was preserved by install -r.'
+echo 'Gear bridge (optional): install bridge-helper-<version>.apk from the release, then set TVHome Settings -> «Система» -> «Загрузка моста» to «При старте Home». After every TV reboot allow ADB debugging once (about 30-40 seconds after Home appears); the bridge then starts by itself.'

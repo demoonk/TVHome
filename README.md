@@ -1,8 +1,19 @@
 # TVHome
 
-## Версия 2.0.4 Внимание! После перезагрузки ТВ слетает назначение шестеренки на пульте и голосовой поиск. Решение пока во втором пункте инструкции. Запускать PowerShell скрипт после перезагрузки ТВ на компьютере. Работаю над этим. Поиск тоже будет дорабатываться. Если не хотите ждать - форкайте проект и допиливайте. 
+## Версия 2.0.5
 
 Обновление устанавливается поверх TVHome 1.x и 2.x с сохранением данных и исходной подписи.
+
+### Как ТВ ведёт себя после установки
+
+После установки Home и настройки всё работает до перезагрузки. Перехват шестерёнки на физическом пульте включается в настройках TVHome: «Система» → «Загрузка моста» → **«При старте Home»**. Если оставить «Вручную», после каждой загрузки мост надо запускать строкой «Запросить загрузку сейчас».
+
+### Как ТВ ведёт себя после перезагрузки
+
+1. ТВ загружается как обычно, TVHome появляется на экране.
+2. Через **30–40 секунд**, когда лаунчер уже прогрузился, ТВ один раз показывает диалог «Разрешить отладку?». Нажмите **«Разрешить»** (галочку «Всегда разрешать» можно поставить — на этой прошивке ТВ всё равно спросит один раз при следующей загрузке).
+3. После подтверждения мост запускается сам: шестерёнка работает, мост перехватывает её без захвата ввода. Ничего на компьютере запускать не нужно.
+4. Если диалог не подтвердить, мост не стартует и шестерёнка работает как обычная кнопка прошивки. Один раз за загрузку — достаточно; повторно подтверждать не надо.
 
 - Голосовой помощник прогревает движок распознавания, когда ассистент готов: первый запрос после включения не платит за холодный старт `com.google.android.tts:search` (на гостиной это было ~6.8 с против ~0.4 с на тёплом движке).
 - Строки приложений без карточек получают кнопку «Искать в …» — только если поисковый вход приложения действительно достижим, иначе честную «Открыть …». Проверяются exported search активности и проверенные URL-правила (VK Видео, РешалаТВ, SmartTube, TizenTube).
@@ -11,6 +22,7 @@
 - Установщик `Setup-TVHome.ps1`: помощник запускается через `setsid`, проверяется его pid-файл и живость процесса, и отдельная проверка — ответ на запрос `launcher:` (тот же путь, по которому голосовой источник выбирается из настроек TVHome). Проверяются разрешения, включая установку APK из неизвестных источников.
 - Мостик пульта: короткое нажатие шестерёнки — настройки экрана, удержание (порог 700 мс) — настройки звука; физический Back возвращает в сохранённый поиск. Активности настроек проверяются на самом ТВ.
 - Виджет погоды публикуется отдельным ассетом `TVHome-weather.apk`; установщик скачивает его с проверкой SHA-256, если ассет есть в релизе. Город выбирается в настройках TVHome (Погода).
+- Аддон помощника моста публикуется ассетом `bridge-helper-<версия>.apk`; установщик ставит его сам, если ассет есть в релизе (SHA-256 проверяется). Без аддона мост после перезагрузки не поднимется.
 
 Совместимость миграции, необязательный мостик физической кнопки Back и откат описаны в [переходе на 2.0.0](docs/migration-2.0.0.md).
 
@@ -27,7 +39,7 @@
 
 - Телевизор или приставка с Android 8.0 и новее.
 - Компьютер с Windows и подключение к той же локальной сети.
-- APK `TVHome-2.0.4.apk` из [последнего релиза](https://github.com/demoonk/TVHome/releases/latest).
+- APK `TVHome-2.0.5.apk` из [последнего релиза](https://github.com/demoonk/TVHome/releases/latest).
 - Android SDK Platform-Tools: https://developer.android.com/tools/releases/platform-tools
 
 Для автоматической установки перейдите к пункту 2: APK и Platform-Tools установщик скачает сам. Для ручной установки распакуйте Platform-Tools. Положите APK в папку с `adb.exe`. Откройте эту папку в Проводнике, в адресной строке введите `powershell` и нажмите Enter. Все команды ниже выполняются в этом окне.
@@ -91,7 +103,7 @@ $ErrorActionPreference = 'Stop'; $installer = Join-Path $env:TEMP 'Setup-TVHome.
 ### 4. Установка или обновление
 
 ```powershell
-.\adb.exe -s IP:PORT install -r .\TVHome-2.0.4.apk
+.\adb.exe -s IP:PORT install -r .\TVHome-2.0.5.apk
 ```
 
 Дождитесь `Success`. После успешной установки откройте TVHome:
@@ -247,13 +259,13 @@ ADB-помощник работает до перезагрузки телеви
 Windows, PowerShell:
 
 ```powershell
-.\install.ps1 -Device "IP:PORT" -Apk ".\TVHome-2.0.4.apk" -Adb "C:\platform-tools\adb.exe"
+.\install.ps1 -Device "IP:PORT" -Apk ".\TVHome-2.0.5.apk" -Adb "C:\platform-tools\adb.exe"
 ```
 
 macOS / Linux:
 
 ```sh
-sh ./install.sh "IP:PORT" "./TVHome-2.0.4.apk" "./platform-tools/adb"
+sh ./install.sh "IP:PORT" "./TVHome-2.0.5.apk" "./platform-tools/adb"
 ```
 
 Скрипты не назначают Home, не меняют службы доступности и голосового помощника; первоначальная настройка описана выше. Микрофону отдельно нужен доступ к записи звука.
@@ -264,11 +276,11 @@ sh ./install.sh "IP:PORT" "./TVHome-2.0.4.apk" "./platform-tools/adb"
 
 ## Скриншоты / Screenshots
 
-[Галерея: 9 снимков с настоящего ТВ и настройки кратко / Nine real TV screenshots and a brief settings guide](docs/screenshots/README.md)
+[Галерея: снимки с настоящего ТВ на TVHome 2.0.5 и настройки кратко / Screenshots from a real TV running TVHome 2.0.5 and a brief settings guide](docs/screenshots/README.md)
 
-| Поиск «Терминатор» / Search | Оформление / Appearance | Помощь / Help |
+| Поиск «Терминатор» / Search | Оформление / Appearance | Система: мост / System: bridge |
 |---|---|---|
-| ![Поиск Терминатор](docs/screenshots/09-terminator-search.png) | ![Оформление](docs/screenshots/02-appearance-settings.png) | ![Помощь](docs/screenshots/08-help-and-update-check.png) |
+| ![Поиск Терминатор](docs/screenshots/09-terminator-search.png) | ![Оформление](docs/screenshots/02-appearance-settings.png) | ![Система: мост](docs/screenshots/10-system-bridge.png) |
 
 ## Обновления и совместимость — русский
 
@@ -302,6 +314,8 @@ TVHome requires **Android TV / Google TV running Android 8.0 or newer (API 26)**
 
 The APK contains everything needed for the basic launcher installation. External apps (Yandex Browser, NUM and other providers) must be installed separately. Floating clocks require permission to display over other apps; microphone input requires audio recording permission. The interactive Windows installer `Setup-TVHome.ps1` in step 2 downloads ADB and the latest APK, assigns Home and grants clock and voice permissions. It starts the assistant helper when Google components are present; choose the voice mode and microphone source on the TV afterwards. The older `install.ps1` and `install.sh` only install the APK and grant clock permissions.
 
+**How the TV behaves.** After installation, set TVHome settings → «Система» → «Загрузка моста» to «При старте Home». After every reboot the TV asks once to allow ADB debugging: about 30–40 seconds after Home appears, when the launcher has finished loading. Press **«Разрешить»** (Allow); the gear bridge then starts by itself and the remote's gear button is intercepted. Nothing has to be run on the computer. If the dialog is not confirmed, the bridge does not start. On this firmware the key is not kept between boots, so one confirmation per boot is expected; this is not an installation error.
+
 ### Download and install
 
 1. Open [GitHub Releases](https://github.com/demoonk/TVHome/releases/latest) and download `TVHome-<version>.apk` under **Assets**. You do not need the source archive or `update.json` to install the app.
@@ -320,16 +334,16 @@ Download the APK and `install.ps1` or `install.sh` from the [latest release](htt
 Windows PowerShell:
 
 ```powershell
-.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.4.apk" -Adb "C:\platform-tools\adb.exe"
+.\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.5.apk" -Adb "C:\platform-tools\adb.exe"
 ```
 
 macOS / Linux:
 
 ```sh
-sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.4.apk" "./platform-tools/adb"
+sh ./install.sh "TV_ADDRESS:PORT" "./TVHome-2.0.5.apk" "./platform-tools/adb"
 ```
 
-If PowerShell blocks a downloaded script, review its contents and use a single invocation with `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.4.apk" -Adb "C:\platform-tools\adb.exe"`. This does not change the persistent system execution policy.
+If PowerShell blocks a downloaded script, review its contents and use a single invocation with `powershell -NoProfile -ExecutionPolicy Bypass -File .\install.ps1 -Device "TV_ADDRESS:PORT" -Apk ".\TVHome-2.0.5.apk" -Adb "C:\platform-tools\adb.exe"`. This does not change the persistent system execution policy.
 
 The scripts require an explicit device, check ADB authorization and API 26+, back up any discoverable installed APK to `backups/`, run `install -r`, and launch `ru.pda.tvhome/ru.pda.tvhome.MainActivity` only after installation reports `Success`. Installation errors stop the script. They do not clear app data, disable the stock Home, change default apps or modify accessibility services. Choose the Home app in system Settings yourself. Use these standalone installers for this repository rather than the legacy upstream `build-and-install` script.
 
@@ -337,7 +351,7 @@ Manual alternative from the Platform-Tools directory:
 
 ```powershell
 .\adb.exe connect TV_ADDRESS:PORT
-.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-2.0.4.apk"
+.\adb.exe -s TV_ADDRESS:PORT install -r "C:\TV\TVHome-2.0.5.apk"
 .\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/ru.pda.tvhome.MainActivity
 ```
 
@@ -384,7 +398,7 @@ cd launcher
 Пример схемы (SHA-256 нужно заменить фактическим):
 
 ```json
-{"versionCode":87,"versionName":"2.0.4","apkName":"TVHome-2.0.4.apk","sha256":"<64 hexadecimal characters>"}
+{"versionCode":139,"versionName":"2.0.5","apkName":"TVHome-2.0.5.apk","sha256":"<64 hexadecimal characters>"}
 ```
 
 Приложение читает Releases API без авторизации; токенов GitHub внутри APK нет. Проверяются SHA-256, packageName, повышение versionCode и совпадение сертификатов подписи перед передачей APK системному установщику.
@@ -407,9 +421,9 @@ Since 1.4.21, say “Алиса, <message>” to open Alice in Yandex Browser an
 
 В настройках, сразу после видимых программ, есть раздел «Заморозка программ» со списком пакетов, которые можно отключать безопасно (в том числе `com.mediatek.wwtv.setupwizard` и `com.google.android.katniss`). Сам лаунчер отключить чужие пакеты не может: для этого нужна привилегия `CHANGE_COMPONENT_ENABLED_STATE` или root. Раздел показывает список и команду `pm disable-user --user 0 <пакет>`; в списке нет Home, системных настроек, тюнера, входов, клавиатуры, WebView, Google-сервисов и служб звука/экрана, а также resource overlay пакетов.
 
-Загрузка моста — дополнительные строки в последнем разделе настроек, «Система». Строка «Загрузка моста» выбирает режим: «Вручную» (по умолчанию) или «При старте Home»; строка «Запросить загрузку сейчас» отправляет ADB-помощнику на ТВ одно действие `ENSURE`, и row закрыта, пока помощник не установлен. Помощник больше не соединяется с adbd по `BOOT_COMPLETED`, разрешение `RECEIVE_BOOT_COMPLETED` убрано: события пульта читает shell-домен, поэтому мост может запустить только сам помощник, а не лаунчер. Каждый запрос — одно подключение помощника, то есть одна возможность диалога авторизации на экране.
+Загрузка моста — дополнительные строки в последнем разделе настроек, «Система». Строка «Загрузка моста» выбирает режим: «Вручную» (по умолчанию) или «При старте Home»; строка «Запросить загрузку сейчас» отправляет ADB-помощнику на ТВ одно действие `ENSURE`, и row закрыта, пока помощник не установлен. События пульта читает shell-домен, поэтому мост может запустить только сам помощник, а не лаунчер. При старте Home запрос уходит не с первого кадра, а после того как лаунчер догрузился: пауза плюс ожидание готовых плиток и фокуса (2026-11-11). Помощник 1.7 отправляет ключ стандартным порядком AUTH (challenge → подпись → ключ), поэтому после подтверждения мост запускается. На этой прошивке ключ не сохраняется между загрузками: ТВ спрашивает один раз при каждой перезагрузке, уже после загрузки лаунчера — нажмите «Разрешить», и мост поднимется сам.
 
-Bridge loading — the extra rows in the last settings section, «Система». The row «Загрузка моста» chooses the mode: manual (the default) or at Home start; the row «Запросить загрузку сейчас» sends one `ENSURE` action to the ADB helper on the TV, and the row stays closed while the helper is not installed. The helper no longer connects at `BOOT_COMPLETED` and the `RECEIVE_BOOT_COMPLETED` permission is removed: only the shell domain reads the remote's events, so only the helper can start the bridge, not the launcher. Each ask is one connection of the helper, so it is one chance of the authorization dialog on the screen.
+Bridge loading — the extra rows in the last settings section, «Система». The row «Загрузка моста» chooses the mode: manual (the default) or at Home start; the row «Запросить загрузку сейчас» sends one `ENSURE` action to the ADB helper on the TV, and the row stays closed while the helper is not installed. Only the shell domain reads the remote's events, so only the helper can start the bridge, not the launcher. At Home start the ask is delayed until the launcher has finished loading — a pause plus waiting for the tiles and the window focus (2026-11-11). Helper 1.7 sends the key in the standard AUTH order (challenge → signature → key), so after the confirmation the bridge starts. On this firmware the key is not kept between boots: the TV asks once after every reboot, after the launcher has loaded — press «Allow» and the bridge starts by itself.
 
 ## Проверка
 

@@ -117,6 +117,7 @@ if ($a -match 'am start') {
  if ($env:SETUP_FAIL -eq 'launch') { 'Error: Activity not started'; exit 1 }
  'Status: ok'; exit 0
 }
+if ($a -match 'sh /data/local/tmp/tvhome-bridge-ensure\.sh') { 'guard started'; exit 0 }
 if ($a -match 'connect|appops set|pm grant|push|nohup|setsid') { exit 0 }
 throw "Unexpected ADB call: $a"
 '''
@@ -454,11 +455,24 @@ class SetupTest(unittest.TestCase):
         self.assertEqual(calls.count('connect 192.168.1.50:5555'), 1)
         self.assertNotIn('install -r', calls)
 
+    def test_installer_pushes_and_runs_the_ensure_script(self):
+        # The manual README command needs the ensure script on the device, so the installer must leave it there
+        # and use it itself: one instance point for the installer, the helper and the manual run.
+        result, calls = self.scenario()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        pushed = [line for line in calls.splitlines() if 'push' in line and 'tvhome-bridge-ensure.sh' in line]
+        self.assertEqual(len(pushed), 1, 'the ensure script must be pushed exactly once')
+        self.assertIn('shell sh /data/local/tmp/tvhome-bridge-ensure.sh', calls)
+        self.assertNotIn('setsid sh /data/local/tmp/assistant-package-guard.sh', calls)
+
     def test_embedded_helper_matches_source(self):
         source = (ROOT / 'Setup-TVHome.ps1').read_text(encoding='utf-8-sig')
         encoded = re.search(r"\$guardBase64 = '([^']+)'", source)[1]
         self.assertEqual(base64.b64decode(encoded).decode(),
                          (ROOT / 'tools/assistant-package-guard.sh').read_text())
+        ensure = re.search(r"\$ensureBase64 = '([^']+)'", source)[1]
+        self.assertEqual(base64.b64decode(ensure).decode(),
+                         (ROOT / 'tools/tvhome-bridge-ensure.sh').read_text())
 
 
 if __name__ == '__main__':
