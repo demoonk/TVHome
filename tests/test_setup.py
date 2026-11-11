@@ -198,6 +198,13 @@ class SetupTest(unittest.TestCase):
             log = (work / 'adb.log').read_text(encoding='utf-8-sig') if (work / 'adb.log').exists() else ''
             return result, log
 
+    def test_setup_script_is_utf8_bom_for_windows_powershell_51(self):
+        # Windows PowerShell 5.1 reads a .ps1 without a BOM as ANSI: the Russian text turns into mojibake and the
+        # script does not parse ("Unexpected token ...", 34 errors). The released 2.0.5 setup was saved without the
+        # BOM on 2026-11-11; the BOM is what makes it run on the default Windows PowerShell.
+        data = (ROOT / 'Setup-TVHome.ps1').read_bytes()
+        self.assertTrue(data.startswith(b'\xef\xbb\xbf'), 'Setup-TVHome.ps1 must start with a UTF-8 BOM')
+
     def test_success(self):
         result, calls = self.scenario()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
