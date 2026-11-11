@@ -68,7 +68,7 @@ $ErrorActionPreference = 'Stop'; $installer = Join-Path $env:TEMP 'Setup-TVHome.
 
 Источник «ТВ» требует Android 13+ и доступного встроенного микрофона. ADB-помощник работает до перезагрузки; для повторного переключения помощника после перезагрузки его нужно запустить снова (ручная команда есть ниже, либо повторно запустите установщик). Уже выбранный режим не обязательно перестаёт работать после перезагрузки.
 
-Файлы, резервная копия APK и прежние настройки сохраняются в `%LOCALAPPDATA%\TVHome\Installer\<папка установки>`. При ошибке установщик останавливается и показывает её текст; выполненные шаги автоматически не откатываются. Резервная копия APK не содержит данные приложения. Проверьте Home, голос, удержание громкости и кнопку шестерёнки с пульта, затем при желании отключите отладку. Локальный установщик отключает Google Home (`com.google.android.apps.tv.launcherx`) только после проверки запуска TVHome, а Katniss — при переключении на помощника TVHome. Google TTS остаётся включённым. Службы доступности не включаются. Рядом с `previous-settings.json` сохраняется `Restore-Google.ps1` для возврата Google Home и помощника. Если роль главного экрана не назначена TVHome и TVHome не открылся, установщик включает Google Home обратно. Заглушку первоначальной настройки (`com.google.android.tungsten.setupwraith`) установщик замораживает для пользователя 0 только после завершения первоначальной настройки прошивки: пока она включена, HOME разрешается в её `RecoveryActivity`, которая перезапускает сама себя, и клавиша Home не доходит до TVHome ни из настроек, ни из сторонних программ — приоритет intent-filter стороннего приложения выше 0 не поднимается. Если первоначальная настройка прошивки ещё не завершена, установщик предупреждает и заглушку не замораживает; Home проверяется после настройки. `Restore-Google.ps1` возвращает её.
+Файлы, резервная копия APK и прежние настройки сохраняются в `%LOCALAPPDATA%\TVHome\Installer\<папка установки>`. При ошибке установщик останавливается и показывает её текст; выполненные шаги автоматически не откатываются. Резервная копия APK не содержит данные приложения. Проверьте Home, голос, удержание громкости и кнопку шестерёнки с пульта. Отладку USB/ADB оставьте включённой, если пользуетесь перехватом шестерёнки: она нужна помощнику после каждой перезагрузки. Локальный установщик отключает Google Home (`com.google.android.apps.tv.launcherx`) только после проверки запуска TVHome, а Katniss — при переключении на помощника TVHome. Google TTS остаётся включённым. Службы доступности не включаются. Рядом с `previous-settings.json` сохраняется `Restore-Google.ps1` для возврата Google Home и помощника. Если роль главного экрана не назначена TVHome и TVHome не открылся, установщик включает Google Home обратно. Заглушку первоначальной настройки (`com.google.android.tungsten.setupwraith`) установщик замораживает для пользователя 0 только после завершения первоначальной настройки прошивки: пока она включена, HOME разрешается в её `RecoveryActivity`, которая перезапускает сама себя, и клавиша Home не доходит до TVHome ни из настроек, ни из сторонних программ — приоритет intent-filter стороннего приложения выше 0 не поднимается. Если первоначальная настройка прошивки ещё не завершена, установщик предупреждает и заглушку не замораживает; Home проверяется после настройки. `Restore-Google.ps1` возвращает её.
 
 Ключ `-Offline` работает только с уже сохранённым кэшем: ADB, APK, `update.json` и контрольные суммы должны быть в `%LOCALAPPDATA%\TVHome\Installer\cache`. GitHub при этом не запрашивается, и файлы берутся из кэша с проверкой SHA-256.
 
@@ -235,7 +235,7 @@ ADB-помощник работает до перезагрузки телеви
 
 Замените последний аргумент целиком, затем проверьте Home. Сброс телевизора для этих действий не нужен.
 
-После завершения настройки можно отключить отладку и отозвать разрешения отладки в настройках ТВ. Для повторного запуска ADB-помощника понадобится снова включить и разрешить подключение.
+Если пользуетесь перехватом шестерёнки, отладку по USB/ADB нужно оставить включённой: ADB-помощник запускает мост после каждой загрузки, и ТВ один раз спрашивает разрешение. Без отладки мост не запустится. Если перехват не нужен, отладку можно отключить и отозвать разрешения отладки в настройках ТВ.
 
 ### Оверлейные часы: разрешения и установка скриптами
 
@@ -355,7 +355,7 @@ Manual alternative from the Platform-Tools directory:
 .\adb.exe -s TV_ADDRESS:PORT shell am start -W -n ru.pda.tvhome/ru.pda.tvhome.MainActivity
 ```
 
-On macOS/Linux use `./adb` instead of `.\adb.exe`. Do not continue to launch after a failed installation. Afterwards, turn off debugging and revoke debugging authorizations in the TV's Settings. `backups/` contains APKs, not app-setting backups; downgrades remain subject to the Android restrictions below.
+On macOS/Linux use `./adb` instead of `.\adb.exe`. Do not continue to launch after a failed installation. Keep USB/ADB debugging on if you use the gear bridge: the ADB helper needs it after every reboot (one confirmation). If you do not use the gear bridge, turn debugging off and revoke the debugging authorizations in the TV's Settings. `backups/` contains APKs, not app-setting backups; downgrades remain subject to the Android restrictions below.
 
 ### Updates from 1.4.19 onward
 
