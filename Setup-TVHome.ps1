@@ -476,6 +476,7 @@ if ($locationState -notmatch 'android\.permission\.ACCESS_FINE_LOCATION: granted
 }
 $weatherInstalled = Install-WeatherWidget
 $bridgeHelperInstalled = Install-BridgeHelper
+$homeManual = $false
 Write-Output (Invoke-Adb -Arguments @('-s', $Device, 'shell', 'cmd', 'package', 'set-home-activity', 'ru.pda.tvhome/ru.pda.tvhome.MainActivity'))
 $resolved = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'cmd', 'package', 'resolve-activity', '--brief', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME')
 $homeVerified = $resolved -match 'ru\.pda\.tvhome/(ru\.pda\.tvhome\.)?MainActivity'
@@ -489,20 +490,27 @@ if (-not $homeVerified) {
     if ($homeVerified) {
         Write-Warning 'Роль главного экрана назначена TVHome, но прошивка направляет HOME в штатный лаунчер. После установки проверьте кнопку Home на пульте.'
     } else {
-        Write-Warning "Не удалось подтвердить назначение Home. Настройка голоса и часов продолжится. Выберите TVHome в системных настройках главного экрана. Ответ Android: $resolved"
+        Write-Warning "Не удалось подтвердить назначение Home автоматически. Настройка голоса и моста продолжится; TVHome можно назначить вручную. Ответ Android: $resolved"
     }
 }
-# Launch the replacement explicitly before disabling Google Home.
+# Launch the replacement explicitly before disabling Google Home. "Warning: Activity not started" means the
+# activity is already in front (a second run), so it counts as a successful launch.
 $probe = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'am', 'start', '-W', '-n', 'ru.pda.tvhome/ru.pda.tvhome.MainActivity')
-if ($probe -notmatch '(?m)^Status: ok\s*$') { throw "Не подтверждён запуск TVHome. Google Home остаётся включённым: $probe" }
+$launchConfirmed = $probe -match '(?m)^Status: ok\s*$' -or $probe -match 'Warning: Activity not started'
+if (-not $launchConfirmed) { throw "Не подтверждён запуск TVHome. Google Home остаётся включённым: $probe" }
 $googleHome = 'com.google.android.apps.tv.launcherx'
 $googleHomePath = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'pm', 'path', $googleHome) -AllowFailure
 $googleHomeDisabled = $false
 try {
-    if ($googleHomePath -match '(?m)^package:') {
+    # Google Home is taken off only when TVHome owns the HOME role: on firmware that never grants the role
+    # (DEXP Q series, 2026-11-11) disabling the stock launcher would leave the TV with no working Home, so it
+    # stays enabled and the owner assigns TVHome manually.
+    if ($roleAssigned -and $googleHomePath -match '(?m)^package:') {
         Write-Host 'Отключаю Google Home для текущего пользователя. Службы доступности не изменяются.'
         $googleHomeDisabled = $true
         Write-Output (Invoke-Adb -Arguments @('-s', $Device, 'shell', 'pm', 'disable-user', '--user', '0', $googleHome))
+    } elseif (-not $roleAssigned) {
+        Write-Warning 'Google Home не отключён: TVHome не получил роль главного экрана. Назначьте его вручную; голос и мост настраиваются дальше.'
     }
     Write-Output (Invoke-Adb -Arguments @('-s', $Device, 'shell', 'cmd', 'package', 'set-home-activity', '--user', '0', $package))
     # On this firmware the recovery stub wins HOME resolution while it is enabled: a third-party app cannot get
@@ -514,7 +522,10 @@ try {
     # First-time Google RecoveryActivity may briefly take over HOME. Do not
     # keep restarting it every 500 ms: let its transition finish first.
     $homeLaunch = Invoke-Adb -Arguments @('-s', $Device, 'shell', 'am', 'start', '-W', '-a', 'android.intent.action.MAIN', '-c', 'android.intent.category.HOME')
-    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    # Without the HOME role the firmware will not hand HOME over at all, so a few checks are enough before the
+    # manual instruction; with the role assigned the recovery-stub transition deserves the full minute.
+    $homeAttempts = if ($roleAssigned) { 60 } else { 12 }
+    for ($attempt = 0; $attempt -lt $homeAttempts; $attempt++) {
         if ($attempt -eq 20 -or $attempt -eq 40) {
             Write-Host 'Ожидаю завершения первоначальной настройки Home…'
             Write-Output (Invoke-Adb -Arguments @('-s', $Device, 'shell', 'cmd', 'package', 'set-home-activity', '--user', '0', $package))
@@ -534,10 +545,14 @@ try {
             # Роль уже назначена TVHome, но прошивка во время первоначальной настройки держит
             # HOME за своей установочной активностью. Откатывать Google Home нельзя: это
             # отменило бы выполненное назначение. Home проверяется после настройки прошивки.
-            Write-Warning 'Роль главного экрана назначена TVHome, но телевизор показал не TVHome. Проверьте кнопку Home после завершения первоначальной настройки прошивки. Диагностика: $work\home-activity.txt'
+            Write-Warning "Роль главного экрана назначена TVHome, но телевизор показал не TVHome. Проверьте кнопку Home после завершения первоначальной настройки прошивки. Диагностика: $work\home-activity.txt"
         } else {
-            throw "После назначения Home телевизор не открыл TVHome. Диагностика: $work\home-activity.txt"
+            $homeManual = $true
+            Write-Warning "TVHome не назначен главным экраном автоматически: прошивка не дала роль HOME. Голос и остальные настройки применены; назначьте TVHome вручную (системные Настройки → Приложения → Приложения по умолчанию → Главный экран, либо Button Mapper). Диагностика: $work\home-activity.txt"
         }
+    } elseif (-not $roleAssigned) {
+        $homeManual = $true
+        Write-Warning 'TVHome открылся, но роль главного экрана за ним не закреплена. Проверьте кнопку Home и при необходимости назначьте TVHome вручную.'
     }
 } catch {
     if ($googleHomeDisabled) {
@@ -743,7 +758,9 @@ if ($frozen.Count -gt 0) {
     Write-Host ('Заморожено для пользователя 0: ' + ($frozen -join ', ') + '. Откат: Restore-Google.ps1 или pm enable --user 0 <пакет>.')
 }
 if ($metadataSource -eq 'кэш') { Write-Host 'Установлена версия из сохранённого кэша. Когда GitHub заработает, запустите установщик снова для проверки обновлений.' }
-if ($homeVerified) { Write-Host 'Назначение TVHome главным экраном подтверждено Android. Проверьте кнопку Home на пульте.' }
+if ($homeManual) {
+    Write-Warning 'Главный экран: TVHome не назначен автоматически (прошивка не отдаёт роль HOME). Назначьте его вручную: системные Настройки → Приложения → Приложения по умолчанию → Главный экран, либо кнопкой Home через Button Mapper. Остальные настройки уже применены.'
+} elseif ($homeVerified) { Write-Host 'Назначение TVHome главным экраном подтверждено Android. Проверьте кнопку Home на пульте.' }
 else { Write-Warning 'Назначение главного экрана требует проверки в системных настройках ТВ.' }
 Write-Host 'Включите «Оверлейные часы» в настройках TVHome, если нужны часы поверх других приложений.'
 Write-Host 'Перехват шестерёнки: настройки TVHome → «Система» → «Загрузка моста» → «При старте Home». После каждой перезагрузки подтвердите ADB один раз.'

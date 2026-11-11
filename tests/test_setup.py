@@ -50,7 +50,7 @@ if ($a -match 'dumpsys voiceinteraction') { 'mComponent=ru.pda.tvhome/.LauncherA
 if ($a -match 'pm disable-user --user 0 com.google.android.apps.tv.launcherx') { Set-Content "$env:SETUP_LOG.disabledhome" '1'; exit 0 }
 if ($a -match 'pm enable --user 0 com.google.android.apps.tv.launcherx') { Set-Content "$env:SETUP_LOG.restoredhome" '1'; exit 0 }
 if ($a -match 'resolve-activity') {
- if ($env:SETUP_FAIL -in @('home-role', 'home-unverified', 'home-recovery')) { 'com.google.android.apps.tv.launcherx/.home.HomeActivity'; exit 0 }
+ if ($env:SETUP_FAIL -in @('home-role', 'home-unverified', 'home-recovery', 'home-fail')) { 'com.google.android.apps.tv.launcherx/.home.HomeActivity'; exit 0 }
 
  if (Test-Path "$env:SETUP_LOG.home") { 'ru.pda.tvhome/ru.pda.tvhome.MainActivity' } else { 'stock/.Home' }; exit 0
 }
@@ -101,6 +101,7 @@ if ($a -match 'settings get secure voice_interaction_service' -and (Test-Path "$
 if ($a -match 'settings put secure') { exit 0 }
 if ($a -match 'dumpsys activity') {
  if ($env:SETUP_FAIL -eq 'home-recovery') { 'topResumedActivity= com.google.android.tungsten.setupwraith/.RecoveryActivity'; exit 0 }
+ if ($env:SETUP_FAIL -in @('home-unverified', 'home-fail')) { 'topResumedActivity= com.google.android.apps.tv.launcherx/.home.HomeActivity'; exit 0 }
  if ($env:SETUP_FAIL -eq 'home-transition') {
   $count=0; if(Test-Path "$env:SETUP_LOG.polls") { $count=[int](Get-Content "$env:SETUP_LOG.polls") }
   Set-Content "$env:SETUP_LOG.polls" ($count+1)
@@ -110,7 +111,7 @@ if ($a -match 'dumpsys activity') {
 }
 if ($a -match 'am start' -and $a -notmatch ' -n ') {
  if ($env:SETUP_FAIL -eq 'home-no-activity') { 'Status: ok'; exit 0 }
- if ($env:SETUP_FAIL -in @('home-role', 'home-unverified') -and -not (Test-Path "$env:SETUP_LOG.disabledhome")) { 'Activity: com.google.android.apps.tv.launcherx/.home.HomeActivity' } else { 'Activity: ru.pda.tvhome/.MainActivity' }; exit 0
+ if ($env:SETUP_FAIL -in @('home-role', 'home-unverified', 'home-fail') -and -not (Test-Path "$env:SETUP_LOG.disabledhome")) { 'Activity: com.google.android.apps.tv.launcherx/.home.HomeActivity' } else { 'Activity: ru.pda.tvhome/.MainActivity' }; exit 0
 }
 if ($a -match 'settings get') { 'stock/.Assistant'; exit 0 }
 if ($a -match 'am start') {
@@ -334,9 +335,25 @@ class SetupTest(unittest.TestCase):
         result, calls = self.scenario('home-unverified')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('am start', calls)
-        self.assertNotIn('settings put secure enabled_accessibility_services', calls)
-        self.assertNotIn('settings put secure enabled_accessibility_services', calls)
-        self.assertIn('pm disable-user --user 0 com.google.android.apps.tv.launcherx', calls)
+        self.assertNotIn('pm disable-user --user 0 com.google.android.apps.tv.launcherx', calls)
+        output = result.stdout + result.stderr
+        self.assertIn('Не удалось подтвердить назначение Home', output)
+        self.assertIn('прошивка не дала роль HOME', output)
+        self.assertIn('assistant-package-guard.sh', calls)
+
+    def test_home_without_role_continues_and_asks_for_manual_assignment(self):
+        # DEXP Q series: the firmware never grants the HOME role and keeps its stock launcher. The installer
+        # must not disable Google Home (that would leave the TV without a working Home) and must still finish
+        # the voice/bridge configuration, telling the owner how to assign Home manually.
+        result, calls = self.scenario('home-fail', timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn('pm disable-user --user 0 com.google.android.apps.tv.launcherx', calls)
+        output = result.stdout + result.stderr
+        self.assertIn('Google Home не отключён', output)
+        self.assertIn('прошивка не дала роль HOME', output)
+        self.assertIn('Главный экран: TVHome не назначен автоматически', output)
+        self.assertIn('assistant-package-guard.sh', calls)
+        self.assertIn('settings put secure ru_pda_tvhome_assistant_request launcher:', calls)
 
     def test_compatible_remote_starts_bridge_without_input_filter(self):
         result, calls = self.scenario('bridge')
