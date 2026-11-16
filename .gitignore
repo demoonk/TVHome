@@ -17,3 +17,5 @@ tests/ensure-test-*/
 tests/gear-check-*/
 tests/search-check-*/
 tests/probe*/
+build-output/
+addons/mic-probe/
