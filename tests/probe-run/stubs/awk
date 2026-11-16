@@ -1,4 +1,0 @@
-#!/bin/sh
-printf 'awk stub called: %s
-' "$*" >> "$FAKE_RUN_LOG"
-exit 0

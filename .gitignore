@@ -11,3 +11,9 @@
 backups/
 __pycache__/
 tests/installer-test-*/
+tests/guard-test-*/
+tests/guard-repro-*/
+tests/ensure-test-*/
+tests/gear-check-*/
+tests/search-check-*/
+tests/probe*/

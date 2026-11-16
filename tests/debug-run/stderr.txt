@@ -1,1 +1,0 @@
-/c/Users/demOOn/Documents/TV/TVHome/tests/debug-run/stubs/settings: line 4: echo: write error: Permission denied

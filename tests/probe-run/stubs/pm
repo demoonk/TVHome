@@ -1,6 +1,0 @@
-#!/bin/sh
-case "$1" in
-    path) exit 0 ;;
-    disable-user) printf 'disable-user %s
-' "$4" >> "$FAKE_RUN_LOG"; exit 0 ;;
-esac
