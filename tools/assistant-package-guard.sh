@@ -189,7 +189,7 @@ while :; do
         if [ "$search_pause" -le 0 ]; then
             device=$(getevent -lp 2>/dev/null | awk '
               /^add device/ { path = $NF }
-              /name:.*TVC0GWBT (Consumer Control|Keypad)/ {
+              /name:.*TVC0GWBT (Consumer Control|Keypad|Keyboard)/ {
                 if (seen[path]++ == 0) found = (found == "" ? path : found "," path)
               }
               END { print found }')

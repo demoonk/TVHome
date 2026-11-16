@@ -15,7 +15,7 @@ if ((& $adbPath -s $Device get-state) -ne 'device') { throw 'Device must already
 $inventory = Invoke-Target 'getevent -lp'
 $blocks = [regex]::Matches($inventory, '(?ms)add device \d+: (?<path>/dev/input/event\d+)\s*\n\s*name:\s*"(?<name>[^"]+)"(?<body>.*?)(?=add device |\z)')
 $candidates = @($blocks | Where-Object {
-    $_.Groups['name'].Value -match '^TVC0GWBT (Consumer Control|Keypad)$' -and
+    $_.Groups['name'].Value -match '^TVC0GWBT (Consumer Control|Keypad|Keyboard)$' -and
     $_.Groups['body'].Value -match 'KEY_UNKNOWN' -and $_.Groups['body'].Value -match 'MSC_SCAN'
 })
 if ($candidates.Count -eq 0) { throw 'No compatible TVC0GWBT remote; no helper was started' }

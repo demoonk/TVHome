@@ -66,6 +66,11 @@ NO_REMOTE_INVENTORY = 'add device 1: /dev/input/event7\n  name:     "Keyboard"'
 TWO_REMOTE_INVENTORY = ('add device 1: /dev/input/event3\n  name:     "TVC0GWBT Consumer Control"\n'
                         'add device 2: /dev/input/event5\n  name:     "TVC0GWBT Keypad"\n'
                         'add device 3: /dev/input/event4\n  name:     "TVC0GWBT Mouse"')
+# On the bedroom TV the same remote is enumerated as Keyboard and Consumer Control, and the gear press arrives
+# on the first of them.
+BEDROOM_REMOTE_INVENTORY = ('add device 1: /dev/input/event4\n  name:     "TVC0GWBT Keyboard"\n'
+                            'add device 2: /dev/input/event3\n  name:     "TVC0GWBT Consumer Control"\n'
+                            'add device 3: /dev/input/event2\n  name:     "virtual-search"')
 
 REQUEST_KEY = "secure-ru_pda_tvhome_assistant_request"
 ACK_KEY = "secure-ru_pda_tvhome_assistant_ack"
@@ -220,6 +225,15 @@ class GuardTest(unittest.TestCase):
         self.assertIn("PqRemoteProof /dev/input/event3,/dev/input/event5 16 0", bridge_call[0])
         self.assertNotIn("event4", bridge_call[0])
         self.assertIn("bridge started on /dev/input/event3,/dev/input/event5 size 16", trace)
+
+    def test_the_bedroom_remote_is_read_from_its_keyboard_and_consumer_devices(self):
+        # On the bedroom TV the same remote is enumerated as "Keyboard" and "Consumer Control", and the gear
+        # press lands on the Keyboard. Both are watched; the virtual-search device is not part of the remote.
+        trace, calls = self.bridge(False, inventory=BEDROOM_REMOTE_INVENTORY)
+        bridge_call = [line for line in calls if "app_process" in line]
+        self.assertEqual(len(bridge_call), 1)
+        self.assertIn("PqRemoteProof /dev/input/event4,/dev/input/event3 16 0", bridge_call[0])
+        self.assertIn("bridge started on /dev/input/event4,/dev/input/event3 size 16", trace)
 
     def test_missing_dex_is_reported_and_nothing_is_started(self):
         trace, calls = self.bridge(False, dex=False)
