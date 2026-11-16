@@ -17,6 +17,8 @@ final class SettingsColumns {
     private final Map<Integer,View> sources=new HashMap<>();
     /** Раздел «Заморозка программ» — сразу после видимых программ; раздел «Помощь» — предпоследний. */
     private static final int FREEZE=2,HELP=10,SYSTEM=11;
+    /** OK on «Система» goes straight to the TV's own settings; Right is what opens the bridge rows inside it. */
+    static boolean okOpensSystemSettings(int group) { return group == SYSTEM; }
     private final String[] names;
     private final int[][] rows={{R.id.reorderChoice}, {}, {}, {R.id.tileCropChoice,R.id.animationsChoice,R.id.oledShiftChoice,R.id.headerPlateChoice,R.id.plateOpacityChoice,R.id.plateBlurChoice}, {},
         {R.id.dimDelayChoice,R.id.dimRampChoice}, {R.id.clockColorChoice,R.id.clockCornerChoice,R.id.clockSizeChoice,R.id.clockFontChoice,R.id.clockPositionChoice},
@@ -54,7 +56,16 @@ final class SettingsColumns {
             TextView button=text(names[i],14,0xFFE8EAED);LinearLayout.LayoutParams textParams=new LinearLayout.LayoutParams(0,-2,1);textParams.leftMargin=dp(12);item.addView(button,textParams);
             // The «Система» category opens its own bridge rows; Android system settings is the separate row inside it.
 item.setOnClickListener(v->{returnRow=0;showGroup(group,true);});
-            item.setOnKeyListener((v,key,event)->{if(key==KeyEvent.KEYCODE_DPAD_UP||key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.getAction()==KeyEvent.ACTION_DOWN){int next=group+(key==KeyEvent.KEYCODE_DPAD_UP?-1:1);if(next>=0&&next<categoryButtons.size())categoryButtons.get(next).requestFocus();}return true;}if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(event.getAction()==KeyEvent.ACTION_DOWN){returnRow=0;showGroup(group,true);}return true;}return false;});
+            item.setOnKeyListener((v,key,event)->{if(key==KeyEvent.KEYCODE_DPAD_UP||key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.getAction()==KeyEvent.ACTION_DOWN){int next=group+(key==KeyEvent.KEYCODE_DPAD_UP?-1:1);if(next>=0&&next<categoryButtons.size())categoryButtons.get(next).requestFocus();}return true;}if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(event.getAction()==KeyEvent.ACTION_DOWN){returnRow=0;showGroup(group,true);}return true;}
+                // «Система»: OK opens the TV's own settings at once, Right is what enters the bridge rows.
+                if(okOpensSystemSettings(group)&&(key==KeyEvent.KEYCODE_ENTER||key==KeyEvent.KEYCODE_DPAD_CENTER)){
+                    if(event.getAction()==KeyEvent.ACTION_DOWN){
+                        View systemSettings=sources.get(R.id.tvSettingsChoice);
+                        if(systemSettings!=null)systemSettings.performClick();
+                    }
+                    return true;
+                }
+                return false;});
             item.setOnFocusChangeListener((v,on)->{item.setBackground(fill(on?0xFFE8EAED:0x00000000));button.setTextColor(on?0xFF0E0E0F:0xFFE8EAED);circle.setColor(on?0xFF263041:0xFF1D242C);icon.setImageTintList(android.content.res.ColorStateList.valueOf(on?0xFF8AB4F8:0xFF9AA0A6));focusAnimation(item,on);if(on&&!rendering){returnRow=0;showGroup(group,false);}});
             LinearLayout.LayoutParams itemParams=new LinearLayout.LayoutParams(-1,dp(60));itemParams.bottomMargin=dp(4);navigation.addView(item,itemParams);categoryButtons.add(item);
         }
