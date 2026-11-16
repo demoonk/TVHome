@@ -48,21 +48,22 @@ final class ServiceRepair {
                     if (name != null) enabled.add(name);
                 }
             }
-            // The key-filtering helper answers the picture key and, on this firmware, stops the volume keys from
-            // repeating. It may only be on the list while a picture button is chosen; otherwise it is dropped.
-            boolean pictureKeyOn = !isPictureKeyOff(context);
+            // The key-filtering helper answers the picture key and the remote's microphone button and, on this
+            // firmware, stops the volume keys from repeating. It may only be on the list while one of them is
+            // actually wanted; otherwise it is dropped.
+            boolean keyFilterOn = keyFilterWanted(context);
             List<ComponentName> wanted = new ArrayList<>();
             for (ComponentName name : enabled) {
-                if (keeps(name.getClassName(), pictureKeyOn, true)) wanted.add(name);
+                if (keeps(name.getClassName(), keyFilterOn, true)) wanted.add(name);
             }
             // The redirect watcher records nothing itself because it asks for no keys, so nothing added it after
-            // the boot cleared the list. Home is on the list only while a picture button is chosen.
+            // the boot cleared the list. Home is on the list only while a filtered button is chosen.
             ComponentName redirect = new ComponentName(context.getPackageName(), REDIRECT_SERVICE);
             if (!wanted.contains(redirect)) wanted.add(redirect);
             for (String service : prefs(context).getAll().keySet()) {
                 ComponentName name = new ComponentName(context.getPackageName(), service);
                 if (wanted.contains(name)) continue;
-                if (!keeps(service, pictureKeyOn, true)) {
+                if (!keeps(service, keyFilterOn, true)) {
                     prefs(context).edit().remove(service).apply();
                     continue;
                 }
@@ -88,14 +89,51 @@ final class ServiceRepair {
     private static final String REDIRECT_SERVICE = "ru.pda.tvhome.HomeRedirectService";
 
     /**
+     * Adds HomeKeyService to (or takes it off) the enabled accessibility services, leaving the rest of the list
+     * alone. The launcher holds WRITE_SECURE_SETTINGS, so the owner can turn the microphone button on from the
+     * settings without ADB.
+     */
+    static void setKeyHelper(Context context, boolean wanted) {
+        if (context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+                != PackageManager.PERMISSION_GRANTED) return;
+        String helper = context.getPackageName() + "/ru.pda.tvhome.HomeKeyService";
+        // Android accepts both "pkg/.Class" and "pkg/pkg.Class" for the same service, so the comparison is done
+        // on the parsed component: otherwise the list ends up with the helper written twice.
+        ComponentName helperName = ComponentName.unflattenFromString(helper);
+        String list = Settings.Secure.getString(context.getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        StringBuilder kept = new StringBuilder();
+        if (list != null) {
+            for (String part : list.split(":")) {
+                String name = part.trim();
+                ComponentName name2 = ComponentName.unflattenFromString(name);
+                if (name.isEmpty() || name2 == null || name2.equals(helperName)) continue;
+                if (kept.length() > 0) kept.append(':');
+                kept.append(name);
+            }
+        }
+        if (wanted) {
+            if (kept.length() > 0) kept.append(':');
+            kept.append(helper);
+        }
+        try {
+            Settings.Secure.putString(context.getContentResolver(),
+                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, kept.toString());
+            Settings.Secure.putInt(context.getContentResolver(), Settings.Secure.ACCESSIBILITY_ENABLED, 1);
+        } catch (RuntimeException ignored) {
+            // The setting is the system's; the preference is still recorded.
+        }
+    }
+
+    /**
      * Which services belong on the enabled list. A reboot leaves the list empty and nothing put it back, so the
      * Home button landed on the firmware's recovery stub instead of here. The redirect watcher asks for no keys
-     * at all, so it is kept even when it was never recorded; the key-filtering helper only stays while a picture
-     * button is chosen. A decision alone, so a plain JVM test can call it.
+     * at all, so it is kept even when it was never recorded; the key-filtering helper only stays while a filtered
+     * button (the picture menu or the microphone) is chosen. A decision alone, so a plain JVM test can call it.
      */
-    static boolean keeps(String className, boolean pictureKeyOn, boolean recorded) {
+    static boolean keeps(String className, boolean keyFilterOn, boolean recorded) {
         if (className.endsWith("HomeRedirectService")) return true;
-        if (isKeyFilterHelperName(className)) return pictureKeyOn;
+        if (isKeyFilterHelperName(className)) return keyFilterOn;
         return recorded;
     }
 
@@ -103,15 +141,23 @@ final class ServiceRepair {
         return className.endsWith("HomeKeyService");
     }
 
-    private static boolean isPictureKeyOff(Context context) {
+    /** A picture button chosen, or the microphone button turned on: either one needs the filtering helper. */
+    static boolean voiceSearchNeedsKeyFilter(boolean pictureOn, boolean voiceKeyOn) {
+        return pictureOn || voiceKeyOn;
+    }
+
+    private static boolean keyFilterWanted(Context context) {
+        SharedPreferences prefs = prefs(context);
         String spec;
         try {
-            spec = context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE)
-                    .getString(Config.PICTURE_KEY_KEY, "");
+            spec = prefs.getString(Config.PICTURE_KEY_KEY, "");
         } catch (ClassCastException legacy) {
-            return true;
+            spec = "";
         }
-        return spec == null || spec.isEmpty() || "off".equals(spec);
+        boolean picture = spec != null && !spec.isEmpty() && !"off".equals(spec);
+        // The MAX FF answers the microphone through the assistant, so its helper is bound only for a picture
+        // button the owner chose; the gear keeps the bridge that always answered it.
+        return picture || (!Config.isMaxFirmware() && prefs.getBoolean(Config.VOICE_KEY_KEY, false));
     }
 
     private static SharedPreferences prefs(Context context) {

@@ -33,6 +33,19 @@ public class UpdateRulesTest {
                 "TVHome-1.apk/evil", "TVHome-1.APK", "TVHome-1 apk", "TVHome-1.apk\n"})
             assertFalse("Rejected APK: " + value, UpdateRules.apkName(value));
     }
+    @Test public void acceptsOnlyThePartsTheLauncherUpdates() {
+        for (String value : new String[]{"TVHome-weather.apk", "bridge-helper-1.7.apk", "TVHome-remote-2.1.10.dex"})
+            assertTrue("Accepted part: " + value, UpdateRules.addOnName(value));
+        for (String value : new String[]{null, "", "other.apk", "helper-1.7.apk", "TVHome-.apk",
+                "TVHome-2.1.10 dex", "TVHome-remote-2.1.10.dex.exe", "TVHome-remote.dex/evil"})
+            assertFalse("Rejected part: " + value, UpdateRules.addOnName(value));
+    }
+    @Test public void dexNamesAreRecognisedApartFromApks() {
+        assertTrue(UpdateRules.dexName("TVHome-remote-2.1.10.dex"));
+        assertFalse(UpdateRules.dexName("TVHome-weather.apk"));
+        assertFalse(UpdateRules.dexName("TVHome-remote-.dex"));
+        assertFalse(UpdateRules.dexName(null));
+    }
     @Test public void validatesSha256() {
         String valid = "0123456789abcdef0123456789ABCDEF0123456789abcdef0123456789ABCDEF";
         assertTrue(UpdateRules.sha256(valid));

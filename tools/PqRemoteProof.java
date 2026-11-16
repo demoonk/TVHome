@@ -107,14 +107,20 @@ public final class PqRemoteProof {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3 || args.length > 4) {
-            throw new IllegalArgumentException("device eventSize seconds [longPressMs]");
+            throw new IllegalArgumentException("device[,device...] eventSize seconds [longPressMs]");
         }
-        String device = args[0];
+        // The remote's gear key arrives on one of its two HID devices, and which one is which changes
+        // between boots, so every candidate device is watched by the same process: one press, one launch.
+        String[] devices = args[0].split(",");
         int eventSize = Integer.parseInt(args[1]);
         int seconds = Integer.parseInt(args[2]);
         long longPressMs = args.length == 4 ? Long.parseLong(args[3]) : GearDecision.DEFAULT_LONG_PRESS_MS;
-        if (!device.matches("/dev/input/event[0-9]+")
-                || (eventSize != 16 && eventSize != 24) || seconds < 0 || seconds > 600
+        for (String device : devices) {
+            if (!device.matches("/dev/input/event[0-9]+")) {
+                throw new IllegalArgumentException("Invalid device in " + args[0]);
+            }
+        }
+        if ((eventSize != 16 && eventSize != 24) || seconds < 0 || seconds > 600
                 || longPressMs < 100 || longPressMs > 5000) {
             throw new IllegalArgumentException("Invalid bounded experiment arguments");
         }
@@ -134,18 +140,29 @@ public final class PqRemoteProof {
         boolean pictureAvailable = available(PICTURE_TARGET);
         boolean soundAvailable = available(SOUND_TARGET);
 
+        System.out.println("PQ_REMOTE_READY device=" + String.join(",", devices) + " size=" + eventSize
+                + " arch=" + System.getProperty("os.arch") + " lifetime=" + seconds
+                + " long_ms=" + longPressMs
+                + " picture=" + (pictureAvailable ? "available" : "unavailable")
+                + " sound=" + (soundAvailable ? "available" : "unavailable"));
+        System.out.flush();
+
+        for (String device : devices) {
+            Thread listener = new Thread(() -> listen(device, eventSize, longPressMs,
+                    pictureAvailable, soundAvailable), "gear-" + device);
+            listener.start();
+        }
+        // The listeners are non-daemon: the process lives as long as one of them does.
+    }
+
+    /** One evdev device, read without grabbing input; the launch debounce is shared across devices. */
+    private static void listen(String device, int eventSize, long longPressMs,
+                               boolean pictureAvailable, boolean soundAvailable) {
         byte[] record = new byte[eventSize];
         int pendingScan = -1;
         AtomicLong pressedAt = new AtomicLong(-1);
         AtomicBoolean longFired = new AtomicBoolean(false);
-
         try (InputStream input = new FileInputStream(device)) {
-            System.out.println("PQ_REMOTE_READY device=" + device + " size=" + eventSize
-                    + " arch=" + System.getProperty("os.arch") + " lifetime=" + seconds
-                    + " long_ms=" + longPressMs
-                    + " picture=" + (pictureAvailable ? "available" : "unavailable")
-                    + " sound=" + (soundAvailable ? "available" : "unavailable"));
-            System.out.flush();
             while (true) {
                 int read = 0;
                 while (read < eventSize) {
@@ -164,7 +181,7 @@ public final class PqRemoteProof {
                             long pressAt = System.nanoTime();
                             pressedAt.set(pressAt);
                             longFired.set(false);
-                            System.out.println("PQ_REMOTE_PRESS hold_ms=" + longPressMs);
+                            System.out.println("PQ_REMOTE_PRESS device=" + device + " hold_ms=" + longPressMs);
                             if (soundAvailable) {
                                 Thread held = new Thread(() -> {
                                     try {
@@ -195,6 +212,9 @@ public final class PqRemoteProof {
                     System.out.flush();
                 }
             }
+        } catch (Exception error) {
+            System.out.println("PQ_REMOTE_LISTEN_ERROR " + device + " " + error);
+            System.out.flush();
         }
     }
 }

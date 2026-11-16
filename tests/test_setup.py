@@ -22,6 +22,7 @@ if ($a -match 'get-state') {
 }
 if ($a -match 'getevent -lp') {
  if ($env:SETUP_FAIL -in @('bridge', 'bridge-sound-missing', 'home-recovery')) { "add device 1: /dev/input/event7`n  name:     `"TVC0GWBT Consumer Control`"`n KEY_UNKNOWN MSC_SCAN" }
+ if ($env:SETUP_FAIL -eq 'bridge-two') { "add device 1: /dev/input/event6`n  name:     `"TVC0GWBT Keypad`"`n KEY_UNKNOWN MSC_SCAN`nadd device 2: /dev/input/event7`n  name:     `"TVC0GWBT Consumer Control`"`n KEY_UNKNOWN MSC_SCAN`nadd device 3: /dev/input/event8`n  name:     `"TVC0GWBT Mouse`"`n KEY_LEFT" }
  exit 0
 }
 if ($a -match 'dumpsys input') { 'InputFilterEnabled: false'; exit 0 }
@@ -39,7 +40,8 @@ if ($a -match 'pm disable-user --user 0 (?<pkg>[A-Za-z0-9._]+)') {
  if ($pkg -eq 'com.google.android.apps.tv.launcherx') { Set-Content "$env:SETUP_LOG.disabledhome" '1' }
  exit 0
 }
-if ($a -match 'dumpsys package io.github.sumyabazar1.weather') { 'android.permission.INTERNET: granted=true'; exit 0 }
+if ($a -match 'dumpsys package io.github.sumyabazar1.weather') { 'versionCode=1 minSdk=26 targetSdk=34'; 'android.permission.INTERNET: granted=true'; exit 0 }
+if ($a -match 'dumpsys package io.github.sumyabazar1.bridgehelper') { 'versionCode=8 minSdk=26 targetSdk=34'; 'versionName=1.7'; exit 0 }
 if ($a -match 'am broadcast') { 'Broadcast receiver: io.github.sumyabazar1.weather/.RefreshReceiver'; exit 0 }
 if ($a -match 'getprop') { '34'; exit 0 }
 if ($a -match 'role get-role-holders') {
@@ -65,7 +67,16 @@ if ($a -match ' pull ') {
  Set-Content $Arguments[-1] 'previous APK'
  exit 0
 }
-if ($a -match 'install -r') { if ($env:SETUP_FAIL -eq 'install') { 'Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]' } else { 'Success' }; exit 0 }
+if ($a -match ' install') {
+ if ($env:SETUP_FAIL -eq 'install') { 'Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]'; exit 1 }
+ # An APK rebuilt with another key: Android refuses the in-place update of the add-on package.
+ if ($env:SETUP_FAIL -eq 'addon-signature' -and ($a -match 'weather|helper') -and ($a -match ' -r ')) {
+  Write-Error 'adb.exe: failed to install add-on.apk: Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package signatures do not match newer version; ignoring!]' -ErrorAction Continue
+  'adb.exe: failed to install add-on.apk: Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE: Existing package signatures do not match newer version; ignoring!]'; exit 1
+ }
+ 'Success'; exit 0
+}
+if ($a -match 'pm uninstall (?<pkg>[A-Za-z0-9._]+)') { Add-Content "$env:SETUP_LOG.uninstalled" $Matches['pkg']; exit 0 }
 if ($a -match 'appops get') { $op=$Arguments[-1]; if ($env:SETUP_FAIL -eq 'permission') { "${op}: default" } else { "${op}: allow" }; exit 0 }
 if ($a -match 'dumpsys package') { 'android.permission.RECORD_AUDIO: granted=true'; 'android.permission.WRITE_SECURE_SETTINGS: granted=true'; exit 0 }
 if ($a -match 'settings put secure ru_pda_tvhome_assistant_request') {
@@ -126,7 +137,7 @@ throw "Unexpected ADB call: $a"
 HARNESS = r'''
 function Read-Host { param($Prompt) if ($Prompt -like 'IP ТВ*') { "$env:SETUP_ADDRESS" } else { "$env:SETUP_ANSWER" } }
 function Invoke-RestMethod {
- [pscustomobject]@{assets=@([pscustomobject]@{name='update.json';browser_download_url='https://fixture/metadata'},[pscustomobject]@{name='TVHome-2.0.3.apk';browser_download_url='https://fixture/apk'},[pscustomobject]@{name='TVHome-weather.apk';browser_download_url='https://fixture/weather'},[pscustomobject]@{name='TVHome-remote-2.0.3.dex';browser_download_url='https://fixture/dex'},[pscustomobject]@{name='SHA256SUMS.txt';browser_download_url='https://fixture/sums'})}
+ [pscustomobject]@{assets=@([pscustomobject]@{name='update.json';browser_download_url='https://fixture/metadata'},[pscustomobject]@{name='TVHome-2.0.3.apk';browser_download_url='https://fixture/apk'},[pscustomobject]@{name='TVHome-weather.apk';browser_download_url='https://fixture/weather'},[pscustomobject]@{name='bridge-helper-1.7.apk';browser_download_url='https://fixture/helper'},[pscustomobject]@{name='TVHome-remote-2.0.3.dex';browser_download_url='https://fixture/dex'},[pscustomobject]@{name='SHA256SUMS.txt';browser_download_url='https://fixture/sums'})}
 }
 function Invoke-WebRequest {
  param($Uri,$OutFile,[switch]$UseBasicParsing,$TimeoutSec)
@@ -139,8 +150,9 @@ function Invoke-WebRequest {
   $hash=(Get-FileHash $env:SETUP_APK -Algorithm SHA256).Hash
   if ($env:SETUP_FAIL -eq 'hash') { $hash='0'*64 }
   @{apkName='TVHome-2.0.3.apk';sha256=$hash} | ConvertTo-Json | Set-Content $OutFile
- } elseif ($Uri -like '*fixture/sums') { $sums = @(((Get-FileHash $env:SETUP_APK -Algorithm SHA256).Hash + '  TVHome-remote-2.0.3.dex')); if ($env:SETUP_FAIL -ne 'weather-no-sums') { $sums += ((Get-FileHash $env:SETUP_APK -Algorithm SHA256).Hash + '  TVHome-weather.apk') }; $sums | Set-Content $OutFile
+ } elseif ($Uri -like '*fixture/sums') { $sums = @(((Get-FileHash $env:SETUP_APK -Algorithm SHA256).Hash + '  TVHome-remote-2.0.3.dex')); if ($env:SETUP_FAIL -ne 'weather-no-sums') { $sums += ((Get-FileHash $env:SETUP_APK -Algorithm SHA256).Hash + '  TVHome-weather.apk') }; if ($env:SETUP_FAIL -ne 'helper-no-sums') { $sums += ((Get-FileHash $env:SETUP_APK -Algorithm SHA256).Hash + '  bridge-helper-1.7.apk') }; $sums | Set-Content $OutFile
  } elseif ($Uri -like '*fixture/weather') { Copy-Item $env:SETUP_APK $OutFile
+ } elseif ($Uri -like '*fixture/helper') { Copy-Item $env:SETUP_APK $OutFile
  } elseif ($Uri -like '*fixture/dex') { Copy-Item $env:SETUP_APK $OutFile
  } elseif ($Uri -like '*fixture/apk') { Copy-Item $env:SETUP_APK $OutFile }
  else { Set-Content $OutFile 'fake zip' }
@@ -229,23 +241,55 @@ class SetupTest(unittest.TestCase):
     def test_weather_widget_installed_and_permission_checked(self):
         result, calls = self.scenario()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(calls.count('install -r '), 2, 'expected the launcher and the widget installs')
+        self.assertEqual(calls.count('install -r '), 3, 'expected the launcher, the widget and the helper installs')
         self.assertIn('dumpsys package io.github.sumyabazar1.weather', calls)
         self.assertIn('am broadcast -a io.github.sumyabazar1.weather.action.REFRESH -n io.github.sumyabazar1.weather/.RefreshReceiver', calls)
         self.assertIn('Виджет погоды установлен: TVHome-weather.apk', result.stdout + result.stderr)
+        self.assertIn('Помощник моста установлен: bridge-helper-1.7.apk', result.stdout + result.stderr)
 
     def test_no_weather_key_skips_widget(self):
         result, calls = self.scenario(named={'NoWeather': True})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(calls.count('install -r '), 1)
+        self.assertEqual(calls.count('install -r '), 2)
         self.assertNotIn('io.github.sumyabazar1.weather', calls)
 
     def test_weather_without_checksum_is_not_installed(self):
         result, calls = self.scenario('weather-no-sums')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(calls.count('install -r '), 1)
+        self.assertEqual(calls.count('install -r '), 2)
         self.assertNotIn('io.github.sumyabazar1.weather', calls)
         self.assertIn('Нет контрольной суммы', result.stdout + result.stderr)
+
+    def test_helper_without_checksum_is_not_installed(self):
+        result, calls = self.scenario('helper-no-sums')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn('bridge-helper-1.7.apk', calls)
+        self.assertIn('Нет контрольной суммы для bridge-helper-1.7.apk', result.stdout + result.stderr)
+
+    def test_add_on_signature_mismatch_warns_and_keeps_the_setup(self):
+        # An add-on APK rebuilt with a different key cannot update the installed package: Android answers
+        # INSTALL_FAILED_UPDATE_INCOMPATIBLE. The run must finish, keep the installed add-on, and tell the
+        # owner how to replace it deliberately.
+        result, calls = self.scenario('addon-signature')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        output = ' '.join((result.stdout + result.stderr).split())
+        self.assertIn('подписан другим ключом', output)
+        self.assertIn('adb -s 192.168.1.50:5555 shell pm uninstall io.github.sumyabazar1.weather', output)
+        self.assertNotIn('pm uninstall', calls)
+        self.assertIn('pm grant ru.pda.tvhome android.permission.RECORD_AUDIO', calls)
+        self.assertIn('set-home-activity ru.pda.tvhome/ru.pda.tvhome.MainActivity', calls)
+        self.assertIn('tvhome-bridge-ensure.sh', calls)
+        self.assertIn('Помощник моста остался в прежней версии', output)
+
+    def test_reinstall_add_on_switch_uninstalls_before_the_new_apk(self):
+        result, calls = self.scenario('addon-signature', named={'ReinstallAddOns': True})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('pm uninstall io.github.sumyabazar1.weather', calls)
+        self.assertIn('pm uninstall io.github.sumyabazar1.bridgehelper', calls)
+        retried = [line for line in calls.splitlines() if ' install ' in line and ' -r ' not in line]
+        self.assertEqual(len(retried), 2, 'both add-ons are installed fresh after the removal')
+        self.assertLess(calls.index('pm uninstall io.github.sumyabazar1.weather'),
+                        calls.index('pm uninstall io.github.sumyabazar1.bridgehelper'))
 
     def test_freeze_list_applied_after_install(self):
         result, calls = self.scenario()
@@ -371,6 +415,14 @@ class SetupTest(unittest.TestCase):
         output = result.stdout + result.stderr
         self.assertIn('настройки экрана', output)
         self.assertIn('настройки звука', output)
+
+    def test_bridge_reads_both_hid_devices_of_the_remote(self):
+        # The gear key arrives on the remote's Keypad device while the arrows go to Consumer Control, and the
+        # firmware numbers the two in either order after a reboot, so both are handed to one bridge process.
+        result, calls = self.scenario('bridge-two')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('PqRemoteProof /dev/input/event6,/dev/input/event7 24 0', calls)
+        self.assertNotIn('/dev/input/event8', calls)
 
     def test_missing_sound_activity_warns_and_keeps_the_bridge(self):
         result, calls = self.scenario('bridge-sound-missing')

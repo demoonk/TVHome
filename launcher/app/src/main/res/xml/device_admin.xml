@@ -1,0 +1,6 @@
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <!-- The sleep timer needs lockNow() to put the panel to sleep instead of drawing a black window. -->
+        <force-lock />
+    </uses-policies>
+</device-admin>

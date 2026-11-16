@@ -24,7 +24,19 @@ public final class FreezableAppsTest {
         // The factory key receiver is in the list by the owner's decision: the physical gear reaches it
         // and it shows system settings next to the picture settings window.
         assertTrue(packages.contains("com.homwee.factory"));
+        // The idle extras the owner asked to put in the list (2026-11-14): the CTS test shims and the
+        // feedback consent screen, whose uploader is already frozen.
+        assertTrue(packages.contains("com.android.cts.ctsshim"));
+        assertTrue(packages.contains("com.android.cts.priv.ctsshim"));
+        assertTrue(packages.contains("com.android.tv.feedbackconsent"));
         assertFalse(packages.contains("com.android.managedprovisioning"));
+    }
+    @Test public void theAndroidCoreBlockIsNeverFreezable(){
+        // Removing these branded a TV unbootable (cleanyourtv issue #884), so they stay out of the list
+        // even though they look idle on this firmware.
+        for(String key:new String[]{"com.google.android.ext.services","com.google.android.ext.shared",
+                "com.google.android.modulemetadata","com.google.android.permissioncontroller"})
+            assertFalse(key,FreezableApps.safe(key,"ru.pda.tvhome"));
     }
     @Test public void homeSettingsTunerKeyboardAndWebViewAreNeverFreezable(){
         for(String key:new String[]{"ru.pda.tvhome","com.android.tv.settings",

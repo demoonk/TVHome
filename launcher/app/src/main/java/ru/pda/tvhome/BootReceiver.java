@@ -3,7 +3,6 @@ package ru.pda.tvhome;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.provider.Settings;
 
 /**
  * Brings the launcher up right after the TV boots. Some firmwares ignore the saved preferred home at boot and
@@ -18,6 +17,10 @@ public final class BootReceiver extends BroadcastReceiver {
 
     /** adb shell am broadcast -a ru.pda.tvhome.action.PICTURE_KEY_OFF -n ru.pda.tvhome/ru.pda.tvhome.BootReceiver */
     public static final String ACTION_PICTURE_KEY_OFF = "ru.pda.tvhome.action.PICTURE_KEY_OFF";
+    /** adb shell am broadcast -a ru.pda.tvhome.action.VOICE_KEY_ON -e on true -n ru.pda.tvhome/ru.pda.tvhome.BootReceiver
+     *  Turns the remote's microphone button into the voice search. Answering an unmapped key needs a filtering
+     *  helper, which this firmware pays for by dropping the volume keys' auto-repeat; off gives the repeat back. */
+    public static final String ACTION_VOICE_KEY = "ru.pda.tvhome.action.VOICE_KEY";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -25,6 +28,13 @@ public final class BootReceiver extends BroadcastReceiver {
         String action = intent.getAction();
         if (ACTION_PICTURE_KEY_OFF.equals(action)) {
             pictureKeyOff(context);
+            return;
+        }
+        if (ACTION_VOICE_KEY.equals(action)) {
+            // adb's -e sends a string, so a plain getBooleanExtra would read false.
+            String requested = intent.getStringExtra("on");
+            voiceKey(context, requested != null ? !"false".equalsIgnoreCase(requested)
+                    : intent.getBooleanExtra("on", true));
             return;
         }
         if (!Intent.ACTION_BOOT_COMPLETED.equals(action)
@@ -49,23 +59,22 @@ public final class BootReceiver extends BroadcastReceiver {
     private void pictureKeyOff(Context context) {
         context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE)
                 .edit().putString(Config.PICTURE_KEY_KEY, "off").apply();
-        try {
-            String helper = "ru.pda.tvhome/ru.pda.tvhome.HomeKeyService";
-            String list = Settings.Secure.getString(context.getContentResolver(),
-                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            if (list == null) return;
-            StringBuilder kept = new StringBuilder();
-            for (String part : list.split(":")) {
-                String name = part.trim();
-                if (name.isEmpty() || name.equals(helper)) continue;
-                if (kept.length() > 0) kept.append(':');
-                kept.append(name);
-            }
-            Settings.Secure.putString(context.getContentResolver(),
-                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, kept.toString());
-        } catch (RuntimeException ignored) {
-            // Without WRITE_SECURE_SETTINGS only the preference is reset; the next Home start drops the helper.
-        }
+        ServiceRepair.setKeyHelper(context, false);
         context.sendBroadcast(new Intent(Config.CLOCK_CHANGED_ACTION).setPackage(context.getPackageName()));
+    }
+
+    /** Records the microphone-button choice and puts the filtering helper on (or off) the accessibility list. */
+    private void voiceKey(Context context, boolean on) {
+        context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(Config.VOICE_KEY_KEY, on).apply();
+        // The helper is only worth its price (no volume auto-repeat) while it has a button to answer.
+        ServiceRepair.setKeyHelper(context, on || !isPictureKeyOff(context));
+        context.sendBroadcast(new Intent(Config.VOICE_KEY_CHANGED_ACTION).setPackage(context.getPackageName()));
+    }
+
+    private boolean isPictureKeyOff(Context context) {
+        String spec = context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE)
+                .getString(Config.PICTURE_KEY_KEY, "");
+        return spec == null || spec.isEmpty() || "off".equals(spec);
     }
 }

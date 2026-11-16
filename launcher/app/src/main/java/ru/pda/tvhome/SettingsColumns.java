@@ -20,7 +20,7 @@ final class SettingsColumns {
     private final String[] names;
     private final int[][] rows={{R.id.reorderChoice}, {}, {}, {R.id.tileCropChoice,R.id.animationsChoice,R.id.oledShiftChoice,R.id.headerPlateChoice,R.id.plateOpacityChoice,R.id.plateBlurChoice}, {},
         {R.id.dimDelayChoice,R.id.dimRampChoice}, {R.id.clockColorChoice,R.id.clockCornerChoice,R.id.clockSizeChoice,R.id.clockFontChoice,R.id.clockPositionChoice},
-        {R.id.assistantChoice,R.id.microphoneChoice}, {R.id.sleepSettingsChoice}, {R.id.weatherCityChoice,R.id.weatherGpsChoice}, {}, {R.id.tvSettingsChoice}};
+        {R.id.assistantChoice,R.id.microphoneChoice,R.id.voiceKeyChoice}, {R.id.sleepSettingsChoice}, {R.id.weatherCityChoice,R.id.weatherGpsChoice}, {}, {R.id.tvSettingsChoice}};
     private int section;
     private boolean choicesOpen;
     private int choiceGeneration;
@@ -52,7 +52,8 @@ final class SettingsColumns {
             int[] symbols={R.drawable.settings_layout_grid,R.drawable.settings_layout_grid,R.drawable.ic_lock,R.drawable.settings_palette,R.drawable.settings_palette,R.drawable.settings_sun_moon,R.drawable.settings_clock_3,R.drawable.ic_microphone,R.drawable.ic_sleep_moon,R.drawable.settings_cloud_sun,R.drawable.settings_help,R.drawable.ic_settings};
             ImageView icon=new ImageView(a);icon.setImageResource(symbols[i]);icon.setPadding(dp(10),dp(10),dp(10),dp(10));android.graphics.drawable.GradientDrawable circle=fill(0xFF1D242C);circle.setShape(android.graphics.drawable.GradientDrawable.OVAL);icon.setBackground(circle);icon.setImageTintList(android.content.res.ColorStateList.valueOf(0xFF9AA0A6));item.addView(icon,new LinearLayout.LayoutParams(dp(40),dp(40)));
             TextView button=text(names[i],14,0xFFE8EAED);LinearLayout.LayoutParams textParams=new LinearLayout.LayoutParams(0,-2,1);textParams.leftMargin=dp(12);item.addView(button,textParams);
-            item.setOnClickListener(v->{if(group==names.length-1){sources.get(R.id.tvSettingsChoice).performClick();return;}returnRow=0;showGroup(group,true);});
+            // The «Система» category opens its own bridge rows; Android system settings is the separate row inside it.
+item.setOnClickListener(v->{returnRow=0;showGroup(group,true);});
             item.setOnKeyListener((v,key,event)->{if(key==KeyEvent.KEYCODE_DPAD_UP||key==KeyEvent.KEYCODE_DPAD_DOWN){if(event.getAction()==KeyEvent.ACTION_DOWN){int next=group+(key==KeyEvent.KEYCODE_DPAD_UP?-1:1);if(next>=0&&next<categoryButtons.size())categoryButtons.get(next).requestFocus();}return true;}if(key==KeyEvent.KEYCODE_DPAD_RIGHT){if(event.getAction()==KeyEvent.ACTION_DOWN){returnRow=0;showGroup(group,true);}return true;}return false;});
             item.setOnFocusChangeListener((v,on)->{item.setBackground(fill(on?0xFFE8EAED:0x00000000));button.setTextColor(on?0xFF0E0E0F:0xFFE8EAED);circle.setColor(on?0xFF263041:0xFF1D242C);icon.setImageTintList(android.content.res.ColorStateList.valueOf(on?0xFF8AB4F8:0xFF9AA0A6));focusAnimation(item,on);if(on&&!rendering){returnRow=0;showGroup(group,false);}});
             LinearLayout.LayoutParams itemParams=new LinearLayout.LayoutParams(-1,dp(60));itemParams.bottomMargin=dp(4);navigation.addView(item,itemParams);categoryButtons.add(item);
@@ -224,8 +225,8 @@ final class SettingsColumns {
                     continue;
                 }
             }
-            boolean binary=id==R.id.animationsChoice||id==R.id.oledShiftChoice||id==R.id.headerPlateChoice||id==R.id.clockColorChoice||id==R.id.assistantChoice||id==R.id.microphoneChoice;
-            Boolean on=null;if(binary){android.content.SharedPreferences prefs=activity.getSharedPreferences(Config.SETTINGS_NAME,0);on=id==R.id.assistantChoice?AssistantChoice.isLauncher(activity):id==R.id.microphoneChoice?prefs.getInt("voice_microphone",1)==1:id==R.id.animationsChoice?prefs.getBoolean("animations",true):id==R.id.clockColorChoice?prefs.getBoolean(Config.CLOCK_ON_KEY,true):id==R.id.headerPlateChoice?prefs.getBoolean(Config.HEADER_PLATE_KEY,activity.getResources().getBoolean(R.bool.header_plate)):prefs.getBoolean(Config.OLED_SHIFT_KEY,true);}
+            boolean binary=id==R.id.animationsChoice||id==R.id.oledShiftChoice||id==R.id.headerPlateChoice||id==R.id.clockColorChoice||id==R.id.assistantChoice||id==R.id.microphoneChoice||id==R.id.voiceKeyChoice;
+            Boolean on=null;if(binary){android.content.SharedPreferences prefs=activity.getSharedPreferences(Config.SETTINGS_NAME,0);on=id==R.id.assistantChoice?AssistantChoice.isLauncher(activity):id==R.id.microphoneChoice?prefs.getInt("voice_microphone",1)==1:id==R.id.voiceKeyChoice?prefs.getBoolean(Config.VOICE_KEY_KEY,false):id==R.id.animationsChoice?prefs.getBoolean("animations",true):id==R.id.clockColorChoice?prefs.getBoolean(Config.CLOCK_ON_KEY,true):id==R.id.headerPlateChoice?prefs.getBoolean(Config.HEADER_PLATE_KEY,activity.getResources().getBoolean(R.bool.header_plate)):prefs.getBoolean(Config.OLED_SHIFT_KEY,true);}
             list.addView(row(label,value,original.isEnabled(),()->{original.performClick();if(!choicesOpen)showGroup(group,true);},on,null));
         }
         if(focus){if(returnRow<list.getChildCount()&&list.getChildAt(returnRow).isFocusable())list.getChildAt(returnRow).requestFocus();else focusFirst();}rendering=false;if(changed)enter(false);

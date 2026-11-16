@@ -22,12 +22,38 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Public GitHub releases only. APKs remain subject to the system install confirmation. */
 final class AppUpdates {
     static final String PREFS = "app_updates";
+    /** The parts of a release the launcher keeps current on the TV besides its own APK. */
+    private static final String PARTS_KEY = "release_parts", STAGED_KEY = "staged_";
     private static final int JOB_ID = 0x545655;
     private static final long DAY = 24L * 60 * 60 * 1000, MAX_APK = 100L * 1024 * 1024;
     private static final ExecutorService WORK = Executors.newSingleThreadExecutor();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final AtomicBoolean CHECKING = new AtomicBoolean(), INSTALLING = new AtomicBoolean(), STARTED = new AtomicBoolean();
     private static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, 0); }
+
+    /** One part of a release besides the launcher APK: an APK the TV installs through the system installer, or
+     *  a shell file the launcher stages in its own folder for the guard to copy. */
+    static final class Part {
+        final String name, url, sha256, packageName;
+        final long versionCode;
+        final boolean apk;
+        Part(String name, String url, String sha256, String packageName, long versionCode, boolean apk) {
+            this.name = name; this.url = url; this.sha256 = sha256;
+            this.packageName = packageName; this.versionCode = versionCode; this.apk = apk;
+        }
+        /** The name the shell side of the TV expects, whatever the release calls the asset. */
+        String stageName() {
+            return UpdateRules.shellName(name) ? "assistant-package-guard.sh" : "tvhome-remote-2.dex";
+        }
+        String label() {
+            if (apk) {
+                if ("io.github.sumyabazar1.weather".equals(packageName)) return "погода";
+                if (BridgeTrigger.HELPER_PACKAGE.equals(packageName)) return "помощник моста";
+                return name;
+            }
+            return UpdateRules.shellName(name) ? "guard моста" : "мост шестерёнки";
+        }
+    }
     static String repository(Context c) {
         return UpdateRules.repository(c.getString(R.string.update_repository));
     }
@@ -68,7 +94,18 @@ final class AppUpdates {
             try {
                 if (!fetch(c, new CancellationSignal())) throw new IOException("No stable release");
                 String version = availableVersion(c);
-                message = version.isEmpty() ? "Установлена последняя версия" : "Вышла новая версия " + version;
+                List<Part> parts = pendingParts(c);
+                if (parts.isEmpty()) {
+                    message = version.isEmpty() ? "Установлена последняя версия" : "Вышла новая версия " + version;
+                } else {
+                    StringBuilder names = new StringBuilder();
+                    for (int i = 0; i < parts.size(); i++) {
+                        if (i > 0) names.append(", ");
+                        names.append(parts.get(i).label());
+                    }
+                    message = version.isEmpty() ? "Доступны обновления компонентов: " + names
+                            : "Вышла новая версия " + version + " и компоненты: " + names;
+                }
             } catch (Exception failure) {
                 message = "Не удалось проверить обновления. Проверьте сеть и повторите попытку";
             }
@@ -101,7 +138,20 @@ final class AppUpdates {
         String name=info.getString("versionName"), apk=info.getString("apkName"), hash=info.getString("sha256");
         if(name.trim().isEmpty() || !UpdateRules.apkName(apk)
                 || !links.containsKey(apk) || !UpdateRules.sha256(hash)) throw new IOException("Invalid update metadata");
-        SharedPreferences.Editor edit=prefs(c).edit().putLong("last_check",System.currentTimeMillis());
+        // The release carries the launcher's own parts beside the APK. Their download links are taken from the
+        // asset list, not from the metadata text, so a wrong url in update.json cannot point somewhere else.
+        JSONArray components = info.optJSONArray("components");
+        StringBuilder parts = new StringBuilder();
+        if (components != null) for (int i = 0; i < components.length(); i++) {
+            JSONObject part = components.getJSONObject(i);
+            String partName = part.optString("name", ""), partHash = part.optString("sha256", "");
+            if (partName.equals(apk) || !UpdateRules.addOnName(partName) || !UpdateRules.sha256(partHash)
+                    || !links.containsKey(partName)) continue;
+            part.put("url", links.get(partName));
+            parts.append(part.toString()).append('\n');
+        }
+        SharedPreferences.Editor edit=prefs(c).edit().putLong("last_check",System.currentTimeMillis())
+                .putString(PARTS_KEY, parts.toString());
         if(version>installed(c)) {
             edit.putString("repository",repo).putString("version_name",name).putLong("version_code",version)
                     .putString("apk_url",links.get(apk)).putString("release_url",release.getString("html_url"))
@@ -110,6 +160,73 @@ final class AppUpdates {
         edit.apply();
         return true;
     }
+    /** Parts of the newest release that this TV does not have yet. */
+    static List<Part> pendingParts(Context context) {
+        Context c = context.getApplicationContext();
+        String stored = prefs(c).getString(PARTS_KEY, "");
+        if (stored.isEmpty()) return Collections.emptyList();
+        PackageManager pm = c.getPackageManager();
+        List<Part> result = new ArrayList<>();
+        for (String line : stored.split("\n")) {
+            if (line.isEmpty()) continue;
+            try {
+                JSONObject part = new JSONObject(line);
+                String name = part.getString("name"), url = part.getString("url"), hash = part.getString("sha256");
+                if (!UpdateRules.downloadUrl(url) || !UpdateRules.sha256(hash)) continue;
+                hash = hash.toLowerCase(Locale.ROOT);
+                if (name.endsWith(".apk")) {
+                    String pkg = part.optString("package", "");
+                    if (!pkg.matches("[A-Za-z0-9._]+")) continue;
+                    long installed = 0;
+                    try { installed = code(pm.getPackageInfo(pkg, 0)); }
+                    catch (PackageManager.NameNotFoundException absent) { }
+                    long published = part.optLong("versionCode", 0);
+                    if (published > installed) result.add(new Part(name, url, hash, pkg, published, true));
+                } else {
+                    Part staged = new Part(name, url, hash, "", 0, false);
+                    if (!hash.equals(prefs(c).getString(STAGED_KEY + staged.stageName(), ""))) result.add(staged);
+                }
+            } catch (JSONException unreadable) { /* one bad line does not stop the others */ }
+        }
+        return result;
+    }
+
+    /** Downloads one part, checks its checksum, and installs it: APKs through the system installer, the bridge
+     *  DEX into the launcher folder the shell guard reads. Returns what the caller should tell the owner. */
+    private static String updatePart(Context c, Part part) throws Exception {
+        File dir = new File(c.getCacheDir(), "updates");
+        if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("No update directory");
+        File file = new File(dir, part.name + "-" + part.sha256.substring(0, 12));
+        if (!file.isFile() || !part.sha256.equalsIgnoreCase(sha256(file))) {
+            if (dir.getUsableSpace() < MAX_APK + 8 * 1024 * 1024) throw new IOException("Not enough space");
+            try (OutputStream out = new FileOutputStream(file)) { transfer(part.url, out, MAX_APK, null); }
+        }
+        if (!part.sha256.equalsIgnoreCase(sha256(file))) throw new IOException("Checksum mismatch");
+        if (!part.apk) {
+            File folder = c.getExternalFilesDir(null);
+            if (folder == null) throw new IOException("No launcher folder");
+            File target = new File(folder, "bridge/" + part.stageName());
+            File targetDir = target.getParentFile();
+            if (targetDir != null && !targetDir.isDirectory() && !targetDir.mkdirs()) throw new IOException("No bridge folder");
+            try (InputStream input = new FileInputStream(file); OutputStream out = new FileOutputStream(target)) {
+                byte[] bytes = new byte[8192]; int count;
+                while ((count = input.read(bytes)) != -1) out.write(bytes, 0, count);
+            }
+            try (OutputStream marker = new FileOutputStream(target.getAbsolutePath() + ".sha256")) {
+                marker.write((part.sha256 + "\n").getBytes("UTF-8"));
+            }
+            prefs(c).edit().putString(STAGED_KEY + part.stageName(), part.sha256).apply();
+            return part.label();
+        }
+        PackageInfo archive = c.getPackageManager().getPackageArchiveInfo(file.getAbsolutePath(), 0);
+        if (archive == null || !archive.packageName.equals(part.packageName) || code(archive) != part.versionCode)
+            throw new IOException("Wrong package or version");
+        Uri uri = FileProvider.getUriForFile(c, c.getPackageName() + ".updates", file);
+        c.startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK));
+        return part.label();
+    }
+
     static void schedule(Context c) {
         JobScheduler jobs=c.getSystemService(JobScheduler.class);
         if(jobs==null) return;
@@ -120,7 +237,9 @@ final class AppUpdates {
     }
     static void install(Activity activity) {
         if(activity.isFinishing() || activity.isDestroyed()) return;
-        if(availableVersion(activity).isEmpty()) { toast(activity,"Нет доступного обновления"); return; }
+        String latest = availableVersion(activity);
+        final List<Part> parts = pendingParts(activity);
+        if(latest.isEmpty() && parts.isEmpty()) { toast(activity,"Нет доступного обновления"); return; }
         if(!activity.getPackageManager().canRequestPackageInstalls()) {
             try {
                 activity.startActivity(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+activity.getPackageName())));
@@ -138,11 +257,32 @@ final class AppUpdates {
         WORK.execute(() -> {
             File file=null;
             try {
+                // The parts are small, so they are fetched first: the APK of the launcher is the largest download
+                // and the installer dialog that follows can take the owner's attention for a while.
+                List<String> done=new ArrayList<>();
+                for (Part part : parts) {
+                    try { done.add(updatePart(c,part)); }
+                    catch (Exception failure) {
+                        android.util.Log.w("AppUpdates","Part "+part.name+" unavailable: "+failure.getClass().getSimpleName());
+                        MAIN.post(() -> toast(c,"Компонент "+part.label()+" не обновлён: "+failure.getClass().getSimpleName()));
+                    }
+                }
+                if (!done.isEmpty() && new BridgeTrigger().helperInstalled(c)) new BridgeTrigger().ask(c);
+                if (latest.isEmpty()) {
+                    MAIN.post(() -> {
+                        INSTALLING.set(false);
+                        Activity a=owner.get();
+                        if(a!=null && !a.isDestroyed() && !a.isFinishing())
+                            toast(a, done.isEmpty() ? "Обновлений нет" : "Обновлены компоненты: "+String.join(", ",done));
+                    });
+                    return;
+                }
                 File dir=new File(c.getCacheDir(),"updates");
                 if(!dir.isDirectory() && !dir.mkdirs()) throw new IOException("No update directory");
                 if(!UpdateRules.sha256(hash))throw new IOException("Invalid checksum");
                 file=new File(dir,"TVHome-"+version+"-"+hash.substring(0,12)+".apk");
-                File[] old=dir.listFiles();if(old!=null)for(File f:old)if(f.isFile()&&!f.equals(file))f.delete();
+                File[] old=dir.listFiles();if(old!=null)for(File f:old)if(f.isFile()&&!f.equals(file)
+                        && f.getName().matches("TVHome-[0-9]+.*\\.apk"))f.delete();
                 if(!file.isFile()||!hash.equalsIgnoreCase(sha256(file))){
                     if(dir.getUsableSpace()<MAX_APK+8*1024*1024) throw new IOException("Not enough space");
                     try(OutputStream out=new FileOutputStream(file)) { transfer(url,out,MAX_APK,null); }
@@ -150,10 +290,11 @@ final class AppUpdates {
                 if(!UpdateRules.sha256(hash) || !hash.equalsIgnoreCase(sha256(file))) throw new IOException("Checksum mismatch");
                 verify(c,file,version);
                 File ready=file;
+                final String partsText = done.isEmpty() ? "" : " (компоненты: "+String.join(", ",done)+")";
                 MAIN.post(() -> {
                     INSTALLING.set(false);
                     Activity a=owner.get();
-                    if(a==null || a.isDestroyed() || a.isFinishing() || !a.hasWindowFocus()) { toast(c,"Обновление загружено. Нажмите кнопку обновления в лаунчере");return; }
+                    if(a==null || a.isDestroyed() || a.isFinishing() || !a.hasWindowFocus()) { toast(c,"Обновление загружено"+partsText+". Нажмите кнопку обновления в лаунчере");return; }
                     try {
                         Uri uri=FileProvider.getUriForFile(a,a.getPackageName()+".updates",ready);
                         a.startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/vnd.android.package-archive")

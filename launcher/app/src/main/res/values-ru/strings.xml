@@ -83,9 +83,9 @@
     <!-- Быстрые VPN-кнопки в верхней панели: названия — по приложениям, иконки приложения дают сами. -->
     <string name="vpn_byedpi">ByeDPI</string>
     <string name="vpn_wgtunnel">WG Tunnel</string>
-    <!-- Кнопка таймера сна: гасит экран в назначенное время, но телевизор не выключает. -->
+    <!-- Кнопка таймера сна: выключает экран в назначенное время, но сам телевизор не обесточивает. -->
     <string name="sleep_timer">Таймер сна</string>
-    <string name="sleep_failed">Не удалось погасить экран</string>
+    <string name="sleep_failed">Не удалось выключить экран</string>
     <string name="dim_delay_state">Притемнение: %1$s</string>
     <string name="dim_level_state">Притемнение: %1$d%%</string>
     <string name="dim_off">выкл</string>

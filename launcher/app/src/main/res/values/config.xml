@@ -55,7 +55,7 @@
          OEM passthrough route. If the ID is absent or the app cannot handle the collection, open
          the Live TV app normally instead of selecting a different input. A wrong but registered ID
          can open the app's tuner setup screen instead; that is not detected as a fallback condition.
-         Use a verified input ID, or leave this empty. See docs/devices/haam-r4.md. -->
+         Use a verified input ID from `getevent -lp`, or leave this empty. -->
     <string name="live_tv_input_id" translatable="false"></string>
 
     <!-- Tiles that open a screen of the app instead of its start screen: "package=action", sent to that package.
@@ -178,6 +178,23 @@
          on a tap. A listed app that is not installed leaves the button doing nothing. In place of a package an action word does that action (back, home, recents, mute, sleep, screensaver, settings, wifi, ignore); "wallpaper_next" and "wallpaper_prev" step through the launcher's own wallpaper — Home comes forward and the player cross-fades one item on. Leave empty to omit. -->
     <string-array name="app_keys" translatable="false">
     </string-array>
+
+    <!-- Scancodes of a remote button the firmware cannot map to a keycode. The CHiQ / AI PONT remote's
+         microphone arrives as KEYCODE_UNKNOWN with scanCode 240 (0xF0): Android dispatches it to nobody, so
+         without this the button does nothing. Home answers it with the voice screen straight from
+         MainActivity — no accessibility key filtering, which on this firmware stops the volume keys from
+         auto-repeating. Remotes whose mic button Android already maps (KEYCODE_VOICE_ASSIST) need no entry.
+         Empty: the microphone button does nothing. Found with `getevent -lt` or the key probe. -->
+    <integer-array name="voice_key_scancodes">
+        <item>240</item>
+    </integer-array>
+
+    <!-- Keycodes that also mean "microphone": some remotes send the mapped Android assist key instead of an
+         unmapped scancode. Checked in MainActivity too, so Home answers the button without a key-filtering
+         accessibility service. -->
+    <integer-array name="voice_key_keycodes">
+        <item>231</item>
+    </integer-array>
 
     <!-- Package of the stock launcher, for TVs whose firmware turns it back on after it was disabled. XGIMI's
          com.xgimi.xrmservice does, on every one of its remote keys, power included (docs/TROUBLESHOOTING.md).

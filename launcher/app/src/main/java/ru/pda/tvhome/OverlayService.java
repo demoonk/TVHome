@@ -14,7 +14,6 @@ import android.os.Looper;
 import android.os.SystemClock;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextClock;
@@ -24,8 +23,8 @@ import android.widget.TextClock;
  *
  * This firmware stops repeating the remote's volume keys as soon as ANY accessibility service is enabled — key
  * filtering or not — so the launcher keeps none. The clock is an ordinary app overlay (SYSTEM_ALERT_WINDOW, granted
- * over adb), and "going to sleep" is a black focusable window instead of a power-off: the panel stops showing
- * anything, and the first key press closes it.
+ * over adb). "Going to sleep" is a real display-sleep request through SleepTimer; the old black focusable window
+ * only dimmed the panel and is intentionally gone.
  */
 public final class OverlayService extends Service {
 
@@ -37,9 +36,6 @@ public final class OverlayService extends Service {
         instance.dismissSleep();return true;
     }
 
-    static boolean sleepNow() {
-        return instance != null && instance.showSleep();
-    }
 
     private static final long TICK_MS = 1000L;
     private static final long SHIFT_MS = 5 * 60_000L;
@@ -278,46 +274,10 @@ public final class OverlayService extends Service {
             return;
         }
         warning.hide();
-        if (showSleep()) SleepTimer.touch(this);
+        // The timer must actually sleep the display: the black window alone leaves the backlight on.
+        if (SleepTimer.fireNow(this)) SleepTimer.touch(this);
     }
 
-    /**
-     * A black focusable window: the screen shows nothing, and the first key press closes it. Power-off needs
-     * either an accessibility service (which costs the volume keys their repeat) or a system permission the TV
-     * does not give apps, so this is the quiet equivalent.
-     */
-    private boolean showSleep() {
-        android.os.PowerManager power=getSystemService(android.os.PowerManager.class);
-        if(power!=null&&!power.isInteractive())return false;
-        if (sleepScrim != null) return true;
-        sleepScrim = new View(this);
-        sleepScrim.setBackgroundColor(0xFF000000);
-        sleepScrim.setFocusableInTouchMode(true);
-        sleepScrim.setOnTouchListener((v,event)->{dismissSleep();return true;});
-        sleepScrim.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_DOWN || event.getAction() == KeyEvent.ACTION_UP) {
-                dismissSleep();
-                return true;
-            }
-            return true;
-        });
-        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.OPAQUE);
-        params.gravity = Gravity.TOP | Gravity.START;
-        params.screenBrightness = 0f;
-        try {
-            windowManager.addView(sleepScrim, params);
-            sleepScrim.requestFocus();
-            return true;
-        } catch (RuntimeException refused) {
-            android.util.Log.w("TvHomeClock", "sleep scrim refused: " + refused, refused);
-            sleepScrim = null;
-            return false;
-        }
-    }
 
     private void notifyLauncherWake() {
         sendBroadcast(new Intent(ACTION_WAKE).setPackage(getPackageName()));

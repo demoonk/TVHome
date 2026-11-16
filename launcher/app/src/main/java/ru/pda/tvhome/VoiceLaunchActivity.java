@@ -20,9 +20,8 @@ public final class VoiceLaunchActivity extends Activity {
     private int speechRetries;
     private int captureRetries;
     private int listenSeconds = 10;
-    private boolean pipeAttempted;
     private VoiceListeningView listening;
-    private boolean ownSession; private int ownSessionMode = 1;
+    private boolean ownSession; private int ownSessionMode = 1; private boolean pipeAttempted;
     private TvMicrophoneInput tvMicrophone;
     private String activeQuery;
     private String activeTarget;
@@ -70,13 +69,14 @@ unavailable) { fail("Распознавание речи недоступно");
 
     private void startOwnSession(int mode, int viewSeconds, VoiceListeningView view) {
         ownSession = true; ownSessionMode = mode;
+        pipeAttempted = TvMicrophoneInput.pipeIsWorthTrying(mode);
         tvMicrophone = new TvMicrophoneInput();
         tvMicrophone.onPartial(view::setHeard);
         tvMicrophone.onLevel(value -> view.setLevel((float) value));
         tvMicrophone.onState(view::setState);
-        // The pipe is only worth trying for a chosen remote mic; otherwise the session takes the engine's
-        // own microphone and the listening time is ours, not the engine's short silence window.
-        if (TvMicrophoneInput.pipeIsWorthTrying(mode)) tvMicrophone.start(this, this::phrases, this::captureError, viewSeconds, mode);
+        // Mode 2 asks the chosen remote microphone directly; the other modes let the engine listen, and
+        // only the length of the window is decided by the launcher.
+        if (pipeAttempted) tvMicrophone.start(this, this::phrases, this::captureError, viewSeconds, mode);
         else tvMicrophone.startPlain(this, this::phrases, this::captureError, viewSeconds);
     }
 
@@ -282,14 +282,12 @@ unavailable) { fail("Распознавание речи недоступно");
         android.util.Log.w("tvvoice", "header microphone: back to listening");
         if (!AssistantChoice.isLauncher(this)) { listen(); return; }
         android.content.SharedPreferences settings = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE);
-        int mode = settings.getInt("voice_microphone", 1);
-        showListening(mode, TvMicrophoneInput.captureSeconds(settings.getInt("voice_timeout", 10)));
+        showListening(settings.getInt("voice_microphone", 1), TvMicrophoneInput.captureSeconds(settings.getInt("voice_timeout", 10)));
     }
 
     /** Our own listening screen, created once and reused when the header microphone asks for a new phrase. */
     private void showListening(int mode, int seconds) {
         listenSeconds = seconds;
-        pipeAttempted = TvMicrophoneInput.pipeIsWorthTrying(mode);
         if (listening == null) listening = new VoiceListeningView(this, seconds, this::finish);
         setContentView(listening);
         if (tvMicrophone != null) tvMicrophone.close();
@@ -480,9 +478,21 @@ unavailable) { fail("Распознавание речи недоступно");
         timeout.postDelayed(() -> { if (!isFinishing() && !isDestroyed()) route(words); }, 800);
     }
 
-    /** The engine can refuse the pipe source (ERROR_CLIENT on this firmware): plain session, then the window. */
+    /** A chosen microphone that gave only its noise floor is replaced by the engine's own session. */
     private void captureError(String message) {
         android.util.Log.w("tvvoice","capture error: "+message+" retries "+captureRetries);
+        if (pipeAttempted && captureRetries == 0) {
+            pipeAttempted = false; captureRetries = 1;
+            android.util.Log.w("tvvoice","the chosen microphone gave no sound, switching to the engine session");
+            if (listening != null) listening.setState("Слушаю через телевизор");
+            if (tvMicrophone != null) tvMicrophone.close();
+            tvMicrophone = new TvMicrophoneInput();
+            tvMicrophone.onPartial(listening == null ? words -> {} : listening::setHeard);
+            tvMicrophone.onLevel(listening == null ? value -> {} : value -> listening.setLevel((float) value));
+            tvMicrophone.onState(listening == null ? text -> {} : listening::setState);
+            tvMicrophone.startPlain(this, this::phrases, this::captureError, listenSeconds);
+            return;
+        }
         if (!engineWindowAllowed(ownSession)) {
             // The chosen path is our own session, so the Google window must not appear after our input:
             // one more attempt with the same session, then the message.
@@ -492,13 +502,6 @@ unavailable) { fail("Распознавание речи недоступно");
                 if (listening != null) listening.setState("Слушаю снова");
                 startOwnSession(ownSessionMode, listenSeconds, listening);
             } else fail(message);
-            return;
-        }
-        if (captureRetries == 0 && pipeAttempted) {
-            captureRetries = 1;
-            if (tvMicrophone == null) tvMicrophone = new TvMicrophoneInput();
-            android.util.Log.w("tvvoice","fallback to plain session (engine mic)");
-            tvMicrophone.startPlain(this, this::phrases, this::captureError, listenSeconds);
             return;
         }
         if (captureRetries < 2) { captureRetries = 2; android.util.Log.w("tvvoice","fallback to engine window"); listen(); return; }

@@ -7,12 +7,12 @@ android {
     compileSdk 34
 
     defaultConfig {
-        // Opt-in identity for firmware with a package-name HOME allowlist; see docs/devices/xiaomi-mitv-aetp0-dofus.md.
+        // Opt-in identity for firmware with a package-name HOME allowlist; pass -PlauncherApplicationId=... when needed.
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('ru.pda.tvhome')
         minSdk 26
         targetSdk 34
-        versionCode 144
-        versionName '2.1.0'
+        versionCode 154
+        versionName '2.1.10'
     }
 
     signingConfigs {

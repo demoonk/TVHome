@@ -16,6 +16,15 @@ final class AssistantChoice {
     private static final String CHOSEN_LAUNCHER = "chosen_launcher";
     static final String RECOGNIZER =
             "com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService";
+    /**
+     * The physical remote's microphone button is serviced by AtvRemote, which follows the "assistant" setting.
+     * Checked on the living-room TV on 2026-11-14: when the setting names TVHome's own voice activity, the remote
+     * button opens the launcher's search instead of Google. So the launcher choice names TVHome and freezes
+     * Katniss, and the system choice names Katniss and unfreezes it. The earlier arrangement (2026-11-11,
+     * bedroom TV) gave the remote button to Google and only the launcher icon to TVHome.
+     */
+    static final String KATNISS =
+            "com.google.android.katniss/.search.serviceapi.KatnissVoiceInteractionService";
 
     /**
      * The shell-side guard answers only while it is running, so after every reboot or framework restart the
@@ -31,14 +40,15 @@ final class AssistantChoice {
         boolean permission = context.checkSelfPermission(android.Manifest.permission.WRITE_SECURE_SETTINGS)
                 == android.content.pm.PackageManager.PERMISSION_GRANTED;
         String current = value(context, KEY);
+        boolean chosenLauncher = prefs.getBoolean(CHOSEN_LAUNCHER, false);
         if (recordDecision(permission, prefs.getBoolean(CHOSEN_LAUNCHER, false), current, own)) {
             prefs.edit().putBoolean(CHOSEN_LAUNCHER, true).apply();
         }
-        String recognizer = restoreDecision(permission, prefs.getBoolean(CHOSEN_LAUNCHER, false), current, own);
+        String recognizer = restoreDecision(permission, chosenLauncher, current, own);
         if (recognizer == null) return;
         try {
             android.content.ContentResolver cr = context.getContentResolver();
-            Settings.Secure.putString(cr, "assistant", own);
+            Settings.Secure.putString(cr, "assistant", assistantFor(context, chosenLauncher));
             Settings.Secure.putString(cr, KEY, own);
             Settings.Secure.putString(cr, "voice_recognition_service", recognizer);
         } catch (RuntimeException ignored) {
@@ -70,6 +80,34 @@ final class AssistantChoice {
         return own(context).equals(selected);
     }
 
+    /**
+     * The component the system "assistant" setting names for a choice. The remote microphone button follows it:
+     * Home's own voice activity for the launcher choice, Google's assistant for the system one.
+     */
+    static String assistantFor(Context context, boolean launcher) {
+        return launcher ? voiceActivity(context).flattenToString() : googleAssistant(context);
+    }
+
+    /** The exported activity that answers ACTION_ASSIST: the launcher's own voice screen. */
+    static ComponentName voiceActivity(Context context) {
+        return new ComponentName(context, VoiceLaunchActivity.class);
+    }
+
+    /** Google's assistant when it is installed, Home's own voice activity when it is not. */
+    static String googleAssistant(Context context) {
+        ComponentName katniss = ComponentName.unflattenFromString(KATNISS);
+        try {
+            if (katniss != null) {
+                context.getPackageManager().getServiceInfo(katniss,
+                        android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS);
+                return KATNISS;
+            }
+        } catch (android.content.pm.PackageManager.NameNotFoundException missing) {
+            // No Google Assistant: the remote microphone button has no handler on this firmware anyway.
+        }
+        return voiceActivity(context).flattenToString();
+    }
+
     private static ComponentName own(Context context) {
         return new ComponentName(context, LauncherAssistantService.class);
     }
@@ -89,7 +127,10 @@ final class AssistantChoice {
         String assistant;
         if (launcher) {
             target = own(context).flattenToString();
-            assistant = target;
+            assistant = assistantFor(context, true);
+            ComponentName voice = voiceActivity(context);
+            try { context.getPackageManager().getActivityInfo(voice, 0); }
+            catch (android.content.pm.PackageManager.NameNotFoundException missing) { return false; }
             if (!isLauncher(context) && !prefs.edit().putString("system_service", previous)
                     .putString("system_assistant", previousAssistant).commit()) return false;
         } else {

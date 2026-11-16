@@ -60,10 +60,18 @@ final class FreezableApps {
         new Item("com.android.providers.contacts","Пустой провайдер контактов"),
         new Item("com.android.providers.userdictionary","Словарь пользователя"),
         new Item("com.google.android.syncadapters.calendar","Синхронизация календаря"),
-        new Item("com.google.android.youtube.tvmusic","Музыкальный сервис")
+        new Item("com.google.android.youtube.tvmusic","Музыкальный сервис"),
+        new Item("com.android.cts.ctsshim","Тестовый пакет CTS из apex-модуля; проверке системы он не нужен"),
+        new Item("com.android.cts.priv.ctsshim","Привилегированная часть того же тестового пакета CTS"),
+        new Item("com.android.tv.feedbackconsent","Экран согласия на отправку отзывов; сам сбор отзывов уже заморожен")
     );
 
-    /** Never frozen: the launcher, settings, tuner and inputs, keyboard, WebView, Google services and the audio/display services. */
+    /**
+     * Never frozen: the launcher, settings, tuner and inputs, keyboard, WebView, Google services and the
+     * audio/display services. The Android core block stays out of the list too: the permission controller,
+     * the package installer, ext services/shared and module metadata are the packages whose removal has
+     * branded a TV unbootable (cleanyourtv issue #884), so they are protected here even though they look idle.
+     */
     static final Set<String> FORBIDDEN=Set.of(
         "ru.pda.tvhome","com.android.tv.settings",
         "com.mediatek.tvinput","com.google.android.tv.inputplayer","com.mediatek.tv.inputplayeroverlay",
@@ -79,7 +87,9 @@ final class FreezableApps {
         "com.android.statementservice","com.android.rkpdapp","com.android.devicelockcontroller","com.android.managedprovisioning",
         "com.android.packageinstaller","com.google.android.packageinstaller","com.android.keychain","com.android.backupconfirm",
         "com.android.certinstaller","com.android.tv.frameworkpackagestubs","com.android.vpndialogs","com.android.se",
-        "com.android.bluetooth","com.android.wifi.resources","com.android.networkstack","com.android.inputdevices");
+        "com.android.bluetooth","com.android.wifi.resources","com.android.networkstack","com.android.inputdevices",
+        "com.google.android.ext.services","com.google.android.ext.shared","com.google.android.modulemetadata",
+        "com.google.android.permissioncontroller","com.android.permissioncontroller","com.google.android.safetycenter.resources");
 
     static List<Item> list(){return ITEMS;}
 

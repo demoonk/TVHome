@@ -169,6 +169,7 @@
             android:layout_marginTop="18dp"
             android:text="@string/voice_assistant" />
         <TextView android:id="@+id/microphoneChoice" style="@style/SettingsRow" android:layout_marginTop="10dp" android:text="Микрофон" />
+        <TextView android:id="@+id/voiceKeyChoice" style="@style/SettingsRow" android:layout_marginTop="10dp" android:text="Кнопка микрофона" />
         <TextView android:id="@+id/sleepSettingsChoice" style="@style/SettingsRow" android:layout_marginTop="18dp" android:text="Время до сна" />
 
         <TextView

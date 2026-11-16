@@ -17,6 +17,17 @@ import java.util.Set;
 /** Built-in launcher defaults and owner settings. No theme import or external overlay. */
 final class Config {
     private static final String TAG = "TvHome.Config";
+
+    /**
+     * The living-room firmware family ("AI PONT MAX FF", device ventura). Its remote microphone is already
+     * routed by the firmware to the assistant chosen in the settings, so the launcher does not take the raw
+     * microphone key there: on this remote the gear shares the same unmapped scancode, and taking it would
+     * silence the gear. Other TVs use the launcher's own voice interception.
+     */
+    static boolean isMaxFirmware() {
+        String model = android.os.Build.MODEL == null ? "" : android.os.Build.MODEL.toLowerCase();
+        return model.contains("max ff");
+    }
     static final String SETTINGS_NAME = "launcher_settings";
     /** Overlay clock: colour (ARGB), corner (0 TR, 1 TL, 2 BR, 3 BL) and text size in sp. */
     static final String CLOCK_COLOR_KEY = "clock_color";
@@ -39,6 +50,10 @@ final class Config {
     static final String HEADER_PLATE_BLUR_KEY = "header_plate_blur";
     /** Which button opens the TV's picture/sound menu: "" off, "key:<code>", or "scan:<code>". */
     static final String PICTURE_KEY_KEY = "picture_key";
+    /** Where the remote's microphone button is answered: false, Home alone (no key filtering, so the volume keys
+     *  keep auto-repeating); true, HomeKeyService answers it in every app at the price of that repeat. */
+    static final String VOICE_KEY_KEY = "voice_key";
+    static final String VOICE_KEY_CHANGED_ACTION = "ru.pda.tvhome.action.VOICE_KEY_CHANGED";
     static final String CLOCK_CHANGED_ACTION = "ru.pda.tvhome.action.CLOCK_CHANGED";
     static final String ROWS_BELOW_DOCK_KEY = "rows_below_dock";
     static final String WALLPAPER_CHOICE_KEY = "wallpaper_choice";

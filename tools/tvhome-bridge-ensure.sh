@@ -15,6 +15,23 @@ PIDFILE=$TMP/assistant-package-guard.pid
 HASHFILE=$TMP/assistant-package-guard.hash
 ENSURE_LOG=$TMP/tvhome-bridge-ensure.log
 
+# The launcher downloads the guard from the release into its own external folder; only the shell domain can
+# run it, so the copy is made here, before the running guard is compared with the deployed script. A file is
+# accepted only when its SHA-256 matches the checksum the launcher wrote beside it.
+stage=/sdcard/Android/data/ru.pda.tvhome/files/bridge
+if [ -f "$stage/assistant-package-guard.sh" ] && [ -f "$stage/assistant-package-guard.sh.sha256" ]; then
+  want=$(cat "$stage/assistant-package-guard.sh.sha256" 2>/dev/null)
+  got=$(sha256sum "$stage/assistant-package-guard.sh" 2>/dev/null | awk '{print $1}')
+  if [ -n "$want" ] && [ "$want" = "$got" ] &&
+     { [ ! -f "$GUARD" ] || [ "$(sha256sum "$GUARD" 2>/dev/null | awk '{print $1}')" != "$got" ]; }; then
+    if cp "$stage/assistant-package-guard.sh" "$GUARD" 2>/dev/null; then
+      echo "guard copied from the release" >> "$ENSURE_LOG"
+    else
+      echo "guard copy failed" >> "$ENSURE_LOG"
+    fi
+  fi
+fi
+
 # A recorded pid can be reused by another process, so the command line is checked before trusting it.
 guard_alive=0
 pid=
@@ -30,6 +47,14 @@ fi
 # "check" but not the newer "launcher" request, and the guard's pid and cmdline looked healthy. Compare the
 # deployed script's hash with the recorded one and replace the old instance. A missing hash file means the
 # guard was started before this check existed, so it is replaced too.
+# The guard cannot replace the script it is running from, so the release build waits next to it under a
+# temporary name and is moved into place here; the hash comparison below then restarts the guard.
+if [ -f "$TMP/assistant-package-guard.new.sh" ]; then
+  if mv -f "$TMP/assistant-package-guard.new.sh" "$GUARD" 2>/dev/null; then
+    echo "guard moved from the release" >> "$ENSURE_LOG"
+  fi
+fi
+
 current_hash=$(md5sum "$GUARD" 2>/dev/null | awk '{print $1}')
 running_hash=$(cat "$HASHFILE" 2>/dev/null)
 force=${TVHOME_FORCE_GUARD:-0}

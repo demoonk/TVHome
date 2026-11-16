@@ -52,6 +52,9 @@ public class HomeKeyService extends AccessibilityService {
     private Map<Integer, String> appScancodes = Collections.emptyMap();
     private Map<Integer, String> holdAppKeys = Collections.emptyMap();
     private Map<Integer, String> holdAppScancodes = Collections.emptyMap();
+    /** voice_key_scancodes / voice_key_keycodes: the remote's microphone button, unmapped on this firmware. */
+    private int[] voiceScancodes = new int[0];
+    private int[] voiceKeycodes = new int[0];
 
     /** Waits for the user to unlock when Android binds this service at boot; null once the config is read. */
     private BroadcastReceiver unlockReceiver;
@@ -100,6 +103,11 @@ public class HomeKeyService extends AccessibilityService {
     public void onDestroy() {
         if (instance == this) instance = null;
         stopWaitingForUnlock();
+        if (volumeReceiver != null) {
+            try { unregisterReceiver(volumeReceiver); } catch (RuntimeException ignored) {}
+            volumeReceiver = null;
+        }
+        filterHandler.removeCallbacks(resumeFiltering);
         if (gamepads != null) gamepads.stop();
         super.onDestroy();
     }
@@ -113,6 +121,9 @@ public class HomeKeyService extends AccessibilityService {
         if (repairRecord) ServiceRepair.connected(this, getClass());
         settingsKeycodes = config.settingsKeycodes;
         settingsPanel = config.settingsKeyPanel;
+        // config.xml voice_key_scancodes / voice_key_keycodes: a microphone button the firmware sends unmapped.
+        voiceScancodes = getResources().getIntArray(R.array.voice_key_scancodes);
+        voiceKeycodes = getResources().getIntArray(R.array.voice_key_keycodes);
         appKeys = RemoteKeys.parseAppKeys(config.appKeys);
         appScancodes = RemoteKeys.parseAppScancodes(config.appKeys);
         RemoteKeys.applyKeyFilter(this, config.keyFilter);
@@ -145,6 +156,16 @@ public class HomeKeyService extends AccessibilityService {
      * "scan:<code>" a raw scancode, for the buttons Android maps to nothing (this remote's gear is one).
      */
     private String pictureKeySpec = "";
+    /** config voice_key: the microphone button is answered here too, which needs key filtering. */
+    private boolean voiceKeyOn;
+    /** A volume press suspends filtering for this long so a held volume key repeats as usual. */
+    private static final long VOLUME_PAUSE_MS = 4000;
+    private long filterPausedUntil;
+    /** Temporary: logs every key the helper sees, to find out which buttons this firmware really delivers. */
+    private boolean keyDebug = false;
+    private BroadcastReceiver volumeReceiver;
+    private final Handler filterHandler = new Handler(Looper.getMainLooper());
+    private final Runnable resumeFiltering = () -> applyKeyFilter(getServiceInfo());
     /** The TV's own picture menu; RemoteKeys understands "package/.Activity" and falls back quietly. */
     private static final String PICTURE_TARGET =
             "com.android.tv.settings/.partnercustomizer.picture.PictureActivity";
@@ -158,12 +179,18 @@ public class HomeKeyService extends AccessibilityService {
             // Off by default: with a button chosen the service filters keys, and this firmware then stops
             // repeating the volume keys. The choice is in the launcher settings, one press away.
             pictureKeySpec = prefs.getString(Config.PICTURE_KEY_KEY, "");
+            // On by default only for TVs whose microphone button Android maps to nothing and which have no
+            // assistant route: the MAX FF already sends the button to the assistant, and taking the raw key
+            // there would also take the gear, which shares the unmapped code. The volume keys get their
+            // auto-repeat back through the volume pause below.
+            voiceKeyOn = !Config.isMaxFirmware() && prefs.getBoolean(Config.VOICE_KEY_KEY, false);
         } catch (ClassCastException legacy) {
             // An older build stored a keycode here; drop it rather than crash on the type.
             prefs.edit().remove(Config.PICTURE_KEY_KEY).apply();
             pictureKeySpec = "";
         }
         if (pictureKeySpec == null || "off".equals(pictureKeySpec)) pictureKeySpec = "";
+        armVolumePause();
         applyKeyFilter(getServiceInfo());
         if (pictureKeyReceiver != null) return;
         pictureKeyReceiver = new BroadcastReceiver() {
@@ -173,6 +200,7 @@ public class HomeKeyService extends AccessibilityService {
             }
         };
         IntentFilter filter = new IntentFilter(Config.CLOCK_CHANGED_ACTION);
+        filter.addAction(Config.VOICE_KEY_CHANGED_ACTION);
         try {
             registerReceiver(pictureKeyReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } catch (IllegalArgumentException | SecurityException older) {
@@ -196,16 +224,45 @@ public class HomeKeyService extends AccessibilityService {
     }
 
     /**
-     * Key filtering is what lets the chosen button work while a film is playing, and it is what stops this
-     * firmware from repeating the volume keys. So it is requested only while a button is chosen: off means the
-     * service stays bound but filters nothing, and the remote's auto-repeat keeps working.
+     * Key filtering is what lets the microphone button work while a film is playing, and it is what stops this
+     * firmware from repeating the volume keys. So it is requested only while a button is really needed, and it is
+     * suspended for a few seconds after every volume change: the press itself still steps once, and a hold right
+     * after it ramps as usual. Off means the service stays bound but filters nothing.
      */
     private void applyKeyFilter(AccessibilityServiceInfo info) {
         if (info == null) return;
-        boolean wanted = pictureKeySpec != null && !pictureKeySpec.isEmpty();
-        if (wanted) info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
+        boolean wanted = (pictureKeySpec != null && !pictureKeySpec.isEmpty())
+                || (voiceKeyOn && (voiceScancodes.length > 0 || voiceKeycodes.length > 0));
+        boolean filtering = wanted && SystemClock.elapsedRealtime() >= filterPausedUntil;
+        if (filtering) info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
         else info.flags &= ~AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
         setServiceInfo(info);
+        if (keyDebug) android.util.Log.w("tvvoice", "key filter " + (filtering ? "on" : "off")
+                + " (voice=" + voiceKeyOn + ", picture=" + pictureKeySpec + ")");
+    }
+
+    /**
+     * The volume keys never reach this helper while it filters, so the pause is taken from the system's own
+     * volume broadcast: any change, from the remote or an app, stops filtering for VOLUME_PAUSE_MS.
+     */
+    @android.annotation.SuppressLint("UnspecifiedRegisterReceiverFlag")
+    private void armVolumePause() {
+        if (volumeReceiver != null) return;
+        volumeReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                filterPausedUntil = SystemClock.elapsedRealtime() + VOLUME_PAUSE_MS;
+                applyKeyFilter(getServiceInfo());
+                filterHandler.removeCallbacks(resumeFiltering);
+                filterHandler.postDelayed(resumeFiltering, VOLUME_PAUSE_MS);
+            }
+        };
+        // A protected system broadcast, so Android 14 needs no exported flag.
+        try {
+            registerReceiver(volumeReceiver, new IntentFilter("android.media.VOLUME_CHANGED_ACTION"));
+        } catch (RuntimeException ignored) {
+            volumeReceiver = null;
+        }
     }
 
     /** The TV's picture/sound menu over whatever is playing, the way the stock launcher opened it. */
@@ -229,9 +286,43 @@ public class HomeKeyService extends AccessibilityService {
         return false;
     }
 
+    /** The remote's microphone button, which this firmware sends as an unmapped key (scanCode 240). */
+    private boolean isVoiceKey(KeyEvent event) {
+        for (int scan : voiceScancodes) if (event.getScanCode() == scan) return true;
+        for (int code : voiceKeycodes) if (event.getKeyCode() == code) return true;
+        return false;
+    }
+
+    /** The voice screen, the same way Home's header button opens it. */
+    private void openVoice() {
+        if (AssistantChoice.isLauncher(this)) {
+            if (LauncherAssistantService.launch()) return;
+        }
+        Intent voice = new Intent(Intent.ACTION_MAIN)
+                .setComponent(AssistantChoice.voiceActivity(this))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            startActivity(voice);
+        } catch (RuntimeException unavailable) {
+            Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     @Override
     protected boolean onKeyEvent(KeyEvent event) {
+        if (keyDebug) {
+            android.util.Log.w("tvvoice", "key scan=" + event.getScanCode() + " code=" + event.getKeyCode()
+                    + " action=" + event.getAction() + " source=" + event.getSource());
+        }
         if (RemoteKeys.wallpaperArrow(event)) return false;
+        // The remote's microphone button, answered in every app when the owner turned it on. This firmware sends
+        // it as a DOWN only, so the voice screen opens on the press itself.
+        if (voiceKeyOn && isVoiceKey(event)) {
+            android.util.Log.w("tvvoice", "voice key via HomeKeyService scanCode=" + event.getScanCode()
+                    + " keyCode=" + event.getKeyCode());
+            if (event.getAction() == KeyEvent.ACTION_DOWN) openVoice();
+            return true;
+        }
         // A scancode entry is more specific than any keycode, so it goes first.
         if (RemoteKeys.handle(this, event, appScancodes.get(event.getScanCode()),
                 holdAppScancodes.get(event.getScanCode()))) return true;
@@ -335,7 +426,7 @@ public class HomeKeyService extends AccessibilityService {
     }
 
     /**
-     * Dims the screen: what the sleep timer does when its time comes (SleepTimer). The firmware's own
+     * Sleeps the display: what the sleep timer does when its time comes (SleepTimer). The firmware's own
      * hidden goToSleep puts the display to sleep straight away where it is allowed; where it is blocked,
      * locking the screen does the same on Android TV without powering the TV itself off, and any remote
      * key wakes it. False when the helper is not bound or Android is too old for the action (API 28).

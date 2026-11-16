@@ -15,11 +15,13 @@ if ((& $adbPath -s $Device get-state) -ne 'device') { throw 'Device must already
 $inventory = Invoke-Target 'getevent -lp'
 $blocks = [regex]::Matches($inventory, '(?ms)add device \d+: (?<path>/dev/input/event\d+)\s*\n\s*name:\s*"(?<name>[^"]+)"(?<body>.*?)(?=add device |\z)')
 $candidates = @($blocks | Where-Object {
-    $_.Groups['name'].Value -eq 'TVC0GWBT Consumer Control' -and
+    $_.Groups['name'].Value -match '^TVC0GWBT (Consumer Control|Keypad)$' -and
     $_.Groups['body'].Value -match 'KEY_UNKNOWN' -and $_.Groups['body'].Value -match 'MSC_SCAN'
 })
-if ($candidates.Count -ne 1) { throw 'No unique compatible TVC0GWBT remote; no helper was started' }
-$eventDevice = $candidates[0].Groups['path'].Value
+if ($candidates.Count -eq 0) { throw 'No compatible TVC0GWBT remote; no helper was started' }
+# One process reads every device of the remote: the gear key arrives on whichever HID device the firmware
+# listed first, and that order changes between boots.
+$eventDevice = ($candidates | ForEach-Object { $_.Groups['path'].Value }) -join ','
 $eventSize = if ((Invoke-Target 'getprop ro.product.cpu.abi') -match '64') { 24 } else { 16 }
 $inputState = Invoke-Target 'dumpsys input'
 if ($inputState -match 'InputFilterEnabled:\s*true') { throw 'An input filter is already active; check volume-key repeat first' }

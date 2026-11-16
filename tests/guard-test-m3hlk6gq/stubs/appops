@@ -1,0 +1,3 @@
+#!/bin/sh
+printf 'appops %s %s %s\n' "$2" "$3" "$4" >> "$FAKE_RUN_LOG"
+exit 0

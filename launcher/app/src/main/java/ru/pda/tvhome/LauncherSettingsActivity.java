@@ -285,6 +285,16 @@ public final class LauncherSettingsActivity extends Activity {
             int mode=choices.getInt("voice_microphone",1);
             choices.edit().putInt("voice_microphone",1-mode).apply();refreshAssistantChoice();
         });
+        // The remote's microphone button. Off, Home answers it on its own screen, which is what keeps the volume
+        // keys repeating; on, HomeKeyService answers it in every app and this firmware stops the repeat.
+        findViewById(R.id.voiceKeyChoice).setOnClickListener(v -> {
+            boolean on = !choices.getBoolean(Config.VOICE_KEY_KEY, false);
+            choices.edit().putBoolean(Config.VOICE_KEY_KEY, on).apply();
+            boolean picture = !("off".equals(choices.getString(Config.PICTURE_KEY_KEY, "")));
+            ServiceRepair.setKeyHelper(this, on || picture);
+            sendBroadcast(new Intent(Config.VOICE_KEY_CHANGED_ACTION).setPackage(getPackageName()));
+            refreshVoiceKeyRow();
+        });
         ((TextView)findViewById(R.id.sleepSettingsChoice)).setText("Время до сна: "+(SleepTimer.selectedMinutes(this)==0?"Не засыпать":SleepTimer.selectedMinutes(this)+" мин."));
         findViewById(R.id.sleepSettingsChoice).setOnClickListener(v -> {
             int[] times={0,1,15,30,45,60,90};
@@ -366,11 +376,29 @@ public final class LauncherSettingsActivity extends Activity {
     private void refreshAssistantChoice() {
         TextView mic=findViewById(R.id.microphoneChoice);
         if(mic!=null){boolean enabled=AssistantChoice.isLauncher(this);mic.setEnabled(enabled);
-            mic.setText("Микрофон: "+(enabled?(getSharedPreferences(Config.SETTINGS_NAME,MODE_PRIVATE).getInt("voice_microphone",1)==0?"ТВ":"Пульт"):"Доступно с помощником от лаунчера"));}
+            int mode=getSharedPreferences(Config.SETTINGS_NAME,MODE_PRIVATE).getInt("voice_microphone",1);
+            mic.setText("Микрофон: "+(enabled?(mode==2?"Пульт+ТВ":mode==0?"ТВ":"Пульт"):"Доступно с помощником от лаунчера"));}
+        refreshVoiceKeyRow();
         TextView row = findViewById(R.id.assistantChoice);
         if (row != null) row.setText(getString(R.string.voice_assistant) + ": "
                 + getString(AssistantChoice.isLauncher(this) ? R.string.assistant_launcher : R.string.assistant_system));
         SettingsColumns.refresh(this);
+    }
+
+    private void refreshVoiceKeyRow() {
+        TextView row = findViewById(R.id.voiceKeyChoice);
+        if (row == null) return;
+        if (Config.isMaxFirmware()) {
+            // This firmware already answers the microphone through the assistant, and its gear shares the
+            // unmapped key code, so the launcher never takes the raw key here.
+            row.setText("Кнопка микрофона: голос идёт запросом системы, шестерёнка не трогается");
+            return;
+        }
+        boolean on = getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE)
+                .getBoolean(Config.VOICE_KEY_KEY, false);
+        row.setText("Кнопка микрофона: " + (on
+                ? "перехват клавиши; громкость не повторяет 4 с"
+                : "голос через запрос системы, громкость повторяет"));
     }
 
     private void reverseRow(TextView[] views) {

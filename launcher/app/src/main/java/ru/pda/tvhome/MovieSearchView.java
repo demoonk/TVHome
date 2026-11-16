@@ -164,8 +164,11 @@ final class MovieSearchView extends LinearLayout {
             TextView name = text(app.label, 19, 0xFF8FCEFF);
             name.setTypeface(null, Typeface.BOLD);
             section.addView(name);
+            // The ring of the spinner sits flush against its bounds, so the label needs a gap of its own:
+            // without it "Поиск…" touched the ring on the living-room TV (2026-11-14 screenshot).
             TextView status = text("Поиск…", 14, 0xff91a0b7);
-            status.setPadding(0, dp(4), 0, dp(8));
+            status.setPadding(dp(10), dp(4), dp(4), dp(8));
+            status.setMaxLines(2);
             LinearLayout loadingRow = new LinearLayout(activity);
             loadingRow.setGravity(Gravity.CENTER_VERTICAL);
             android.widget.ProgressBar loading = spinner();
@@ -311,10 +314,13 @@ final class MovieSearchView extends LinearLayout {
                 outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), dp(8));
             }
         });
-        TextView placeholder = text(hit.title, 19, 0xff9cacc4);
-        placeholder.setGravity(Gravity.CENTER);
-        placeholder.setMaxLines(4);
-        placeholder.setPadding(dp(8), dp(8), dp(8), dp(8));
+        // While the poster is still downloading, the title is the placeholder, and the ring spins in the
+        // middle of the cover. On the living-room TV (2026-11-14 screenshot) the ring sat right on top of
+        // the centred title, so the placeholder now hugs the bottom edge of the cover.
+        TextView placeholder = text(hit.title, 16, 0xff9cacc4);
+        placeholder.setGravity(Gravity.BOTTOM);
+        placeholder.setMaxLines(2);
+        placeholder.setPadding(dp(8), dp(8), dp(8), dp(24));
         cover.addView(placeholder, new android.widget.FrameLayout.LayoutParams(-1, -1));
         ImageView image = new ImageView(activity);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);

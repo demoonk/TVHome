@@ -1,0 +1,7 @@
+﻿#!/bin/sh
+action=$1; domain=$2; key=$3
+case "$action" in
+    get) [ -f "$FAKE_STORE/$domain-$key" ] && cat "$FAKE_STORE/$domain-$key" || echo null ;;
+    put) printf '%s\n' "$4" > "$FAKE_STORE/$domain-$key" ;;
+    delete) rm -f "$FAKE_STORE/$domain-$key" ;;
+esac

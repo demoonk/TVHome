@@ -42,4 +42,9 @@ public final class TvMicrophoneInputTest {
     @Test public void theRateTheEngineIsToldMatchesTheCapture(){
         assertEquals(16000,TvMicrophoneInput.SAMPLE_RATE);
     }
+    @Test public void aDeviceThatOnlyCarriesItsNoiseFloorIsGivenUpEarly(){
+        // On this TV the chosen remote-mic input measured about 0.039 for ten seconds without a word.
+        assertTrue(TvMicrophoneInput.SILENCE_LEVEL > 0.039f);
+        assertTrue(TvMicrophoneInput.SILENCE_LEVEL < 0.2f); // speech must still pass through it
+    }
 }

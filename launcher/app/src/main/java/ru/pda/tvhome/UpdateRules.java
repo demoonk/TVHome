@@ -31,6 +31,25 @@ final class UpdateRules {
     static boolean apkName(String name) {
         return name != null && name.matches("TVHome-[A-Za-z0-9._-]+\\.apk");
     }
+
+    /** Names the release may carry for the launcher's own parts: the weather widget, the bridge helper, the
+     *  bridge DEX and the shell guard that keeps it running. Anything else is not touched by the updater. */
+    static boolean addOnName(String name) {
+        if (name == null) return false;
+        return name.matches("TVHome-[A-Za-z0-9._-]+\\.apk")
+                || name.matches("bridge-helper-[0-9][0-9A-Za-z._-]*\\.apk")
+                || name.matches("TVHome-remote-[0-9][0-9A-Za-z._-]*\\.dex")
+                || name.equals("assistant-package-guard.sh");
+    }
+
+    static boolean dexName(String name) {
+        return name != null && name.matches("TVHome-remote-[0-9][0-9A-Za-z._-]*\\.dex");
+    }
+
+    static boolean shellName(String name) {
+        return "assistant-package-guard.sh".equals(name);
+    }
+
     static boolean sha256(String hash) {
         return hash != null && hash.matches("[A-Fa-f0-9]{64}");
     }

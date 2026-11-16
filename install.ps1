@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$Device = '',
     [string]$Apk = '',
     [string]$Adb = 'adb'

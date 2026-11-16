@@ -1,4 +1,5 @@
 import os
+import hashlib
 import shutil
 import subprocess
 import tempfile
@@ -60,6 +61,11 @@ exit 0
 }
 INVENTORY = 'add device 1: /dev/input/event7\n  name:     "Keyboard"\nadd device 2: /dev/input/event5\n  name:     "TVC0GWBT Consumer Control"'
 NO_REMOTE_INVENTORY = 'add device 1: /dev/input/event7\n  name:     "Keyboard"'
+# The remote shows up as two HID devices plus a mouse; the gear key lands on whichever of the two the firmware
+# enumerated first, and that order is not stable between boots.
+TWO_REMOTE_INVENTORY = ('add device 1: /dev/input/event3\n  name:     "TVC0GWBT Consumer Control"\n'
+                        'add device 2: /dev/input/event5\n  name:     "TVC0GWBT Keypad"\n'
+                        'add device 3: /dev/input/event4\n  name:     "TVC0GWBT Mouse"')
 
 REQUEST_KEY = "secure-ru_pda_tvhome_assistant_request"
 ACK_KEY = "secure-ru_pda_tvhome_assistant_ack"
@@ -76,18 +82,24 @@ class GuardTest(unittest.TestCase):
 
     def run_guard(self, request, until, ok=True, disabled="com.mediatek.wwtv.tvcenter com.homwee.factory",
                   path_fail=False, fails=3, dex=False, bridge_running=False, inventory=INVENTORY,
-                  abi="armeabi-v7a", settings_values=None, timeout=60):
+                  abi="armeabi-v7a", settings_values=None, timeout=60, settings=False, stage=None):
         if BASH is None:
             self.skipTest("bash is not available")
-        with tempfile.TemporaryDirectory(prefix="guard-test-", dir=ROOT / "tests") as temp:
-            work = Path(temp).resolve()
-            assert work.is_relative_to(ROOT)
+        # tempfile.mkdtemp puts an ACL on the directory that the sandbox here cannot read afterwards, so the
+        # fake TV gets a plain directory in the test folder, removed by the finally below.
+        work = ROOT / "tests" / ("guard-test-" + os.urandom(4).hex())
+        assert work.is_relative_to(ROOT)
+        work.mkdir()
+        try:
             stubs = work / "stubs"
             stubs.mkdir()
             for name, body in dict(STUBS, **BRIDGE_STUBS).items():
                 stub = stubs / name
                 stub.write_text(body, encoding="utf-8", newline="\n")
-                stub.chmod(0o755)
+                try:
+                    stub.chmod(0o755)
+                except PermissionError:
+                    pass
             store = work / "store"
             store.mkdir()
             run_log = work / "runs.log"
@@ -98,7 +110,12 @@ class GuardTest(unittest.TestCase):
                 (store / name).write_text(value + "\n", encoding="utf-8")
             if dex:
                 (work / DEX_NAME).write_bytes(b"dex")
-            env = dict(os.environ, TVHOME_TMP=str(work), FAKE_STORE=str(store), FAKE_RUN_LOG=str(run_log),
+            stage_dir = work / "stage"
+            stage_dir.mkdir()
+            for name, value in (stage or {}).items():
+                (stage_dir / name).write_text(value, encoding="utf-8")
+            env = dict(os.environ, TVHOME_TMP=str(work), TVHOME_STAGE=str(stage_dir),
+                       FAKE_STORE=str(store), FAKE_RUN_LOG=str(run_log),
                        FAKE_OK="1" if ok else "0", FAKE_DISABLED=disabled,
                        FAKE_PATH_FAIL="1" if path_fail else "0", FAKE_FAILS=str(fails),
                        FAKE_BRIDGE_RUNNING="1" if bridge_running else "0",
@@ -121,9 +138,15 @@ class GuardTest(unittest.TestCase):
                 time.sleep(0.5)
             proc.terminate()
             proc.wait(timeout=5)
+            if settings:
+                snapshot = {file.name: file.read_text(encoding="utf-8").strip()
+                            for file in store.glob("*") if file.name != "pathfailcount"}
+                return ack, calls, trace, snapshot
             return ack, calls, trace
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
 
-    def bridge(self, bridge_running, inventory=INVENTORY, abi="armeabi-v7a", dex=True):
+    def bridge(self, bridge_running, inventory=INVENTORY, abi="armeabi-v7a", dex=True, stage=None):
         # The bridge part runs at the end of a pass, so waiting only for the start freeze would read the state
         # before the guard has looked at the bridge. The command is started in the background, so the pass is
         # over when its line is in the run log, not when the guard has written its own trace line. Without a
@@ -132,8 +155,32 @@ class GuardTest(unittest.TestCase):
             "app_process" in line for line in calls)
             or any(line in ("no dex", "no remote") for line in trace)
             or trace.count("freeze done") >= 2,
-            bridge_running=bridge_running, inventory=inventory, abi=abi, dex=dex)
+            bridge_running=bridge_running, inventory=inventory, abi=abi, dex=dex, stage=stage)
         return trace, calls
+
+    def test_bridge_dex_staged_by_the_launcher_is_copied_when_the_checksum_matches(self):
+        body = "release bridge bytes"
+        stage = {"tvhome-remote-2.dex": body,
+                 "tvhome-remote-2.dex.sha256": hashlib.sha256(body.encode()).hexdigest() + "\n"}
+        trace, calls = self.bridge(False, dex=False, stage=stage)
+        self.assertIn("bridge dex replaced from the release", trace)
+        self.assertIn("bridge started on /dev/input/event5 size 16", trace)
+
+    def test_bridge_dex_staged_with_a_wrong_checksum_is_not_copied(self):
+        stage = {"tvhome-remote-2.dex": "release bridge bytes",
+                 "tvhome-remote-2.dex.sha256": "0" * 64 + "\n"}
+        trace, calls = self.bridge(False, dex=False, stage=stage)
+        self.assertFalse([line for line in trace if "bridge dex replaced" in line])
+        self.assertFalse([line for line in calls if "app_process" in line])
+
+    def test_guard_and_ensure_scripts_from_the_release_are_staged(self):
+        body = "# guard from the release\n"
+        digest = hashlib.sha256(body.encode()).hexdigest() + "\n"
+        stage = {"assistant-package-guard.sh": body, "assistant-package-guard.sh.sha256": digest,
+                 "tvhome-bridge-ensure.sh": body, "tvhome-bridge-ensure.sh.sha256": digest}
+        trace, calls = self.bridge(False, stage=stage)
+        self.assertIn("guard staged for the next ensure run", trace)
+        self.assertIn("ensure script replaced from the release", trace)
 
     def test_bridge_is_started_when_it_is_not_running(self):
         trace, calls = self.bridge(False)
@@ -162,6 +209,17 @@ class GuardTest(unittest.TestCase):
     def test_64_bit_abi_uses_24_byte_events(self):
         trace, calls = self.bridge(False, abi="arm64-v8a")
         self.assertIn("bridge started on /dev/input/event5 size 24", trace)
+
+    def test_both_hid_devices_of_the_remote_are_read_by_one_bridge(self):
+        # The gear key arrives on the remote's Keypad device while the arrow keys go to Consumer Control, and the
+        # firmware numbers them in either order after a reboot. One process watches both, so one press launches
+        # the picture menu once, and the mouse device is left out.
+        trace, calls = self.bridge(False, inventory=TWO_REMOTE_INVENTORY)
+        bridge_call = [line for line in calls if "app_process" in line]
+        self.assertEqual(len(bridge_call), 1)
+        self.assertIn("PqRemoteProof /dev/input/event3,/dev/input/event5 16 0", bridge_call[0])
+        self.assertNotIn("event4", bridge_call[0])
+        self.assertIn("bridge started on /dev/input/event3,/dev/input/event5 size 16", trace)
 
     def test_missing_dex_is_reported_and_nothing_is_started(self):
         trace, calls = self.bridge(False, dex=False)
@@ -291,6 +349,53 @@ class GuardTest(unittest.TestCase):
         self.assertEqual(calls, ["disable-user com.mediatek.wwtv.tvcenter",
                                  "disable-user com.homwee.factory",
                                  "disable-user com.google.android.apps.tv.launcherx"])
+
+
+    def test_the_launcher_mode_names_tvhome_and_freezes_the_google_assistant(self):
+        # Owner's rule of 2026-11-14: with the assistant setting pointing at the launcher's own voice activity
+        # the remote microphone button opens TVHome's search, verified on the living-room TV, so choosing the
+        # launcher freezes Katniss instead of keeping it enabled as the older build did.
+        ack, calls, _, store = self.run_guard("launcher:uuid-13", lambda ack, calls, trace: ack, settings=True)
+        self.assertEqual(ack, "launcher:uuid-13")
+        self.assertIn("disable-user com.google.android.katniss", calls)
+        self.assertEqual(store.get("secure-assistant"), "ru.pda.tvhome/.VoiceLaunchActivity")
+        self.assertEqual(store.get("secure-voice_interaction_service"),
+                         "ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService")
+        self.assertNotIn("enable com.google.android.katniss", calls)
+
+    def test_an_already_frozen_assistant_is_still_answered_by_the_launcher_mode(self):
+        ack, calls, _, store = self.run_guard("launcher:uuid-14", lambda ack, calls, trace: ack, ok=False,
+                                             disabled="com.google.android.katniss com.mediatek.wwtv.tvcenter",
+                                             settings=True)
+        self.assertEqual(ack, "launcher:uuid-14")
+        self.assertNotIn("disable-user com.google.android.katniss", calls)
+        self.assertEqual(store.get("secure-assistant"), "ru.pda.tvhome/.VoiceLaunchActivity")
+
+    def test_the_system_mode_unfreezes_the_assistant_and_names_it(self):
+        # Choosing the system assistant has to give the remote microphone button back to Google.
+        ack, calls, _, store = self.run_guard("system:uuid-15", lambda ack, calls, trace: ack, settings=True)
+        self.assertEqual(ack, "system:uuid-15")
+        self.assertIn("enable com.google.android.katniss", calls)
+        self.assertEqual(store.get("secure-assistant"),
+                         "com.google.android.katniss/.search.serviceapi.KatnissVoiceInteractionService")
+        self.assertNotIn("disable-user com.google.android.katniss", calls)
+
+    def test_a_launcher_assistant_recorded_at_boot_freezes_the_assistant_again(self):
+        # After a reboot or a firmware update that puts Katniss back, the guard re-freezes it whenever the
+        # assistant setting already names TVHome, before the launcher has a chance to ask.
+        ack, calls, trace = self.run_guard("check:uuid-16", lambda ack, calls, trace: ack, disabled="",
+                                          settings_values={"secure-assistant": "ru.pda.tvhome/.VoiceLaunchActivity"})
+        self.assertEqual(ack, "check:uuid-16")
+        self.assertIn("disable-user com.google.android.katniss", calls)
+        self.assertIn("katniss frozen for the launcher assistant", trace)
+
+    def test_a_google_assistant_at_boot_is_not_touched(self):
+        ack, calls, trace = self.run_guard("check:uuid-17", lambda ack, calls, trace: ack, disabled="",
+                                          settings_values={"secure-assistant":
+                                                         "com.google.android.katniss/.search.serviceapi.KatnissVoiceInteractionService"})
+        self.assertEqual(ack, "check:uuid-17")
+        self.assertNotIn("disable-user com.google.android.katniss", calls)
+        self.assertNotIn("katniss frozen for the launcher assistant", trace)
 
 
 if __name__ == "__main__":

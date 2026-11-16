@@ -16,14 +16,14 @@ import java.lang.reflect.Method;
  *  - any user action (focus or content change seen by the service) restarts the countdown from the chosen duration;
  *  - while audio is playing the countdown holds and only starts again when the sound stops.
  *
- * The TV is never powered off: the screen goes dark, and any key brings it back.
+ * The timer puts the panel to sleep: the display goes off, and any key brings it back.
  */
 public final class SleepTimer {
 
     private static final String PREFS = "sleep_timer";
     private static final String MINUTES = "minutes";
     private static final String DEADLINE = "deadline";
-    /** Wall-clock milliseconds of the dimming moment; 0 while nothing runs. */
+    /** Wall-clock milliseconds of the sleep moment; 0 while nothing runs. */
     static final long NONE = 0L;
     /** Kept for SleepReceiver's old alarm intents; the timer itself no longer schedules any. */
     static final String EXTRA_WARN = "warn";
@@ -60,7 +60,7 @@ public final class SleepTimer {
 
     /**
      * After a reboot or a long standby the stored deadline can already be in the past. The chosen duration
-     * must survive that: start the countdown over instead of dimming the screen the moment the TV comes up.
+     * must survive that: start the countdown over instead of switching the screen off the moment the TV comes up.
      */
     public static void reconcile(Context context) {
         int minutes = selectedMinutes(context);
@@ -88,12 +88,30 @@ public final class SleepTimer {
         return Math.max(0L, deadline(context) - System.currentTimeMillis());
     }
 
-    /** Dims the screen right now. True when the device accepted it. */
+    /** Switches the display off now. True when the system accepted the sleep request. */
     public static boolean fireNow(Context context) {
-        if (OverlayService.sleepNow()) return true;
+        // Sleep is actual display sleep, not a black overlay: the scrim only dimmed the panel and left its
+        // backlight lit (bedroom TV, 2026-11-11). The admin's lockNow, the firmware's goToSleep and the
+        // accessibility lock action all ask the system to put the display to sleep.
+        if (lockNow(context)) return true;
+        if (goToSleep(context)) return true;
         if (HomeRedirectService.sleepNow()) return true;
         if (HomeKeyService.sleepNow()) return true;
-        return goToSleep(context);
+        return false;
+    }
+
+    /** DevicePolicyManager.lockNow() with the admin the installer activates; false when it is not active. */
+    static boolean lockNow(Context context) {
+        try {
+            android.app.admin.DevicePolicyManager dpm = (android.app.admin.DevicePolicyManager)
+                    context.getSystemService(Context.DEVICE_POLICY_SERVICE);
+            android.content.ComponentName admin = new android.content.ComponentName(context, TvHomeAdmin.class);
+            if (dpm == null || !dpm.isAdminActive(admin)) return false;
+            dpm.lockNow();
+            return true;
+        } catch (RuntimeException | LinkageError unavailable) {
+            return false;
+        }
     }
 
     /** The timer fired: the countdown starts over from the chosen duration. */

@@ -91,9 +91,9 @@
     <!-- Top bar VPN shortcuts: named after the apps, they draw the apps' own icons at runtime. -->
     <string name="vpn_byedpi">ByeDPI</string>
     <string name="vpn_wgtunnel">WG Tunnel</string>
-    <!-- Sleep timer button: dims the screen when the time comes, never powers the TV off. -->
+    <!-- Sleep timer button: puts the display to sleep when the time comes; the TV is not powered down. -->
     <string name="sleep_timer">Sleep timer</string>
-    <string name="sleep_failed">Couldn\'t dim the screen</string>
+    <string name="sleep_failed">Couldn\'t turn the screen off</string>
     <!-- The last seconds of the sleep timer: a pill over the tiles, any key cancels. -->
     <!-- Launcher settings: the screen dimmer. -->
     <string name="dim_delay_state">Dimmer: %1$s</string>

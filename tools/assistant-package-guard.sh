@@ -26,7 +26,9 @@ search_pause=0
 request_key=ru_pda_tvhome_assistant_request
 ack_key=ru_pda_tvhome_assistant_ack
 package=com.google.android.katniss
-protected=" ru.pda.tvhome android com.android.tv.settings com.mediatek.tvinput com.google.android.tv.inputplayer com.mediatek.tv.inputplayeroverlay com.mediatek.tv.service com.mediatek.android.leanbacklauncher.partnercustomizer com.mediatek.androidbox com.mediatek.factorykey com.mediatek.wwtv.webview com.google.android.webview com.google.android.inputmethod.latin com.google.android.gms com.google.android.gsf com.google.android.play com.android.vending com.android.systemui com.android.providers.settings com.android.providers.tv com.android.providers.downloads com.google.android.tv.assistant com.google.android.tv.remote.service com.google.android.apps.mediashell com.google.android.apps.tv.dreamx com.google.android.tts com.dolby.android.audio.service com.mediatek.speakerservice com.homwee.dynamicbacklight com.homwee.lightsensorservice com.homwee.synckey com.homwee.upgrade com.homwee.dmt.upgrade com.homwee.mmp.screenshare com.homwee.multiscreenshare com.mediatek.autopair com.android.statementservice com.android.rkpdapp com.android.devicelockcontroller com.android.managedprovisioning com.android.packageinstaller com.google.android.packageinstaller com.android.keychain com.android.backupconfirm com.android.certinstaller com.android.tv.frameworkpackagestubs com.android.vpndialogs com.android.se com.android.bluetooth com.android.wifi.resources com.android.networkstack com.android.inputdevices "
+# The component the remote microphone button reaches when the launcher is the chosen assistant.
+launcher_assistant=ru.pda.tvhome/.VoiceLaunchActivity
+protected=" ru.pda.tvhome android com.android.tv.settings com.mediatek.tvinput com.google.android.tv.inputplayer com.mediatek.tv.inputplayeroverlay com.mediatek.tv.service com.mediatek.android.leanbacklauncher.partnercustomizer com.mediatek.androidbox com.mediatek.factorykey com.mediatek.wwtv.webview com.google.android.webview com.google.android.inputmethod.latin com.google.android.gms com.google.android.gsf com.google.android.play com.android.vending com.android.systemui com.android.providers.settings com.android.providers.tv com.android.providers.downloads com.google.android.tv.assistant com.google.android.tv.remote.service com.google.android.apps.mediashell com.google.android.apps.tv.dreamx com.google.android.tts com.dolby.android.audio.service com.mediatek.speakerservice com.homwee.dynamicbacklight com.homwee.lightsensorservice com.homwee.synckey com.homwee.upgrade com.homwee.dmt.upgrade com.homwee.mmp.screenshare com.homwee.multiscreenshare com.mediatek.autopair com.android.statementservice com.android.rkpdapp com.android.devicelockcontroller com.android.managedprovisioning com.android.packageinstaller com.google.android.packageinstaller com.android.keychain com.android.backupconfirm com.android.certinstaller com.android.tv.frameworkpackagestubs com.android.vpndialogs com.android.se com.android.bluetooth com.android.wifi.resources com.android.networkstack com.android.inputdevices com.google.android.ext.services com.google.android.ext.shared com.google.android.modulemetadata com.google.android.permissioncontroller "
 settings delete secure "$ack_key" >/dev/null
 # Remote gear: the stock shell reacts on its own and shows the old turnkey menu next to the launcher
 # settings. The physical gear also goes to the factory receiver, which opens system settings next to
@@ -56,6 +58,13 @@ while :; do
                 echo "home stub frozen" >> "$trace_file"
             else
                 echo "home stub left on: initial setup not finished" >> "$trace_file"
+            fi
+            # The owner's rule of 2026-11-14: the remote microphone button belongs to the launcher's own voice
+            # screen while the assistant setting names it, so the Google assistant stays frozen after a reboot
+            # or a firmware update that puts the package back. Switching to the system assistant unfreezes it.
+            if [ "$(settings get secure assistant)" = "$launcher_assistant" ]; then
+                pm disable-user --user 0 "$package" >/dev/null 2>&1
+                echo "katniss frozen for the launcher assistant" >> "$trace_file"
             fi
             boot_freeze=1
             echo "freeze done" >> "$trace_file"
@@ -104,22 +113,23 @@ while :; do
                 esac
                 ;;
             launcher)
-                selected=$(settings get secure voice_interaction_service)
-                if [ "$selected" = "ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService" ]; then
-                    # A package already frozen answers nothing, so the launcher would wait five seconds
-                    # and give up: already off counts as the same state.
-                    if pm disable-user --user 0 "$package" >/dev/null 2>&1 ||
-                            pm list packages -d | grep -qx "$package"; then
-                        # Package removal can clear the selected assistant even when another one was
-                        # selected first. Reassert our entry after that package operation completes.
-                        settings put secure assistant ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService
-                        settings put secure voice_interaction_service ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService
-                        settings put secure "$ack_key" "$request"
-                    fi
+                # The physical remote's mic button is serviced by AtvRemote, which follows the "assistant"
+                # setting. Checked on the living-room TV on 2026-11-14: naming TVHome's voice activity makes the
+                # remote button open the launcher's own search, so the launcher choice points the assistant at
+                # TVHome and freezes Katniss. The system choice, the "system" mode below, unfreezes it again.
+                if settings put secure assistant "$launcher_assistant" >/dev/null 2>&1 &&
+                        settings put secure voice_interaction_service ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService >/dev/null 2>&1 &&
+                        settings put secure voice_recognition_service com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService >/dev/null 2>&1 &&
+                        ( pm disable-user --user 0 "$package" >/dev/null 2>&1 ||
+                          pm list packages -d | grep -qx "$package" ); then
+                    settings put secure "$ack_key" "$request"
                 fi
                 ;;
             system)
-                if pm enable --user 0 "$package" >/dev/null 2>&1; then
+                # The owner chose the system assistant: Katniss has to be able to answer the remote button,
+                # and the assistant setting has to name it for the remote microphone to be routed to it.
+                if pm enable --user 0 "$package" >/dev/null 2>&1 &&
+                        settings put secure assistant "$package/.search.serviceapi.KatnissVoiceInteractionService" >/dev/null 2>&1; then
                     settings put secure "$ack_key" "$request"
                 fi
                 ;;
@@ -131,11 +141,57 @@ while :; do
     # bridge is the guard's own child here and is started again whenever it is gone. The remote is enumerated
     # late, so a missing one is searched again instead of given up on; the search only runs while the bridge is
     # not running, and is then throttled so a quiet guard stays quiet.
+    # A newer bridge build arrives from the release, downloaded by the launcher itself into its own external
+    # folder. Only the shell domain can run app_process, so the copy is made here: the file is accepted only
+    # when its SHA-256 matches the checksum the launcher wrote next to it, and the running bridge is stopped
+    # so the next pass starts the new one.
+    # The launcher downloads the release's own parts into its external folder. Only the shell domain can put
+    # files into /data/local/tmp and run app_process, so the copies are made here, each one checked against the
+    # checksum the launcher wrote beside it. The guard never overwrites the script it is running from: the new
+    # guard is parked next to it, and the ensure script moves it into place and restarts the guard by the
+    # recorded hash.
+    stage_dir=${TVHOME_STAGE:-/sdcard/Android/data/ru.pda.tvhome/files/bridge}
+    for staged in tvhome-remote-2.dex tvhome-bridge-ensure.sh assistant-package-guard.sh; do
+        source=$stage_dir/$staged
+        [ -f "$source" ] && [ -f "$source.sha256" ] || continue
+        want=$(cat "$source.sha256" 2>/dev/null)
+        got=$(sha256sum "$source" 2>/dev/null | awk '{print $1}')
+        if [ -z "$want" ] || [ "$want" != "$got" ]; then
+            echo "staged $staged checksum mismatch" >> "$trace_file"
+            continue
+        fi
+        if [ "$staged" = "tvhome-remote-2.dex" ]; then
+            if [ ! -f "$dex_file" ] || [ "$(sha256sum "$dex_file" 2>/dev/null | awk '{print $1}')" != "$got" ]; then
+                if cp "$source" "$dex_file" 2>/dev/null; then
+                    echo "bridge dex replaced from the release" >> "$trace_file"
+                    for pid in $(pidof "$bridge_name" 2>/dev/null); do kill "$pid" 2>/dev/null; done
+                else
+                    echo "bridge dex copy failed" >> "$trace_file"
+                fi
+            fi
+        elif [ "$staged" = "tvhome-bridge-ensure.sh" ]; then
+            target=$tmp_dir/tvhome-bridge-ensure.sh
+            if [ ! -f "$target" ] || [ "$(sha256sum "$target" 2>/dev/null | awk '{print $1}')" != "$got" ]; then
+                if cp "$source" "$target" 2>/dev/null; then
+                    echo "ensure script replaced from the release" >> "$trace_file"
+                fi
+            fi
+        else
+            target=$tmp_dir/assistant-package-guard.new.sh
+            if [ ! -f "$target" ] || [ "$(sha256sum "$target" 2>/dev/null | awk '{print $1}')" != "$got" ]; then
+                if cp "$source" "$target" 2>/dev/null; then
+                    echo "guard staged for the next ensure run" >> "$trace_file"
+                fi
+            fi
+        fi
+    done
     if [ -f "$dex_file" ] && ! pidof "$bridge_name" >/dev/null 2>&1; then
         if [ "$search_pause" -le 0 ]; then
             device=$(getevent -lp 2>/dev/null | awk '
               /^add device/ { path = $NF }
-              /name:.*TVC0GWBT Consumer Control/ { found = path }
+              /name:.*TVC0GWBT (Consumer Control|Keypad)/ {
+                if (seen[path]++ == 0) found = (found == "" ? path : found "," path)
+              }
               END { print found }')
             search_pause=15
             if [ -n "$device" ]; then

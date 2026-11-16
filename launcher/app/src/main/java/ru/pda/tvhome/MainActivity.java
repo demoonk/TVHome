@@ -197,10 +197,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void refreshUpdateButton() {
         if (btnUpdate == null || isDestroyed()) return;
         String version = AppUpdates.availableVersion(this);
-        boolean visible = !version.isEmpty();
+        List<AppUpdates.Part> parts = AppUpdates.pendingParts(this);
+        boolean visible = !version.isEmpty() || !parts.isEmpty();
         if (!visible && btnUpdate.hasFocus()) firstTopButtonAfterUpdate().requestFocus();
         btnUpdate.setVisibility(visible ? View.VISIBLE : View.GONE);
-        btnUpdate.setContentDescription(visible ? "Обновить до " + version : "Обновить приложение");
+        StringBuilder label = new StringBuilder();
+        if (!version.isEmpty()) label.append("Обновить до ").append(version);
+        if (!parts.isEmpty()) {
+            if (label.length() > 0) label.append(" и ");
+            else label.append("Обновить ");
+            for (int i = 0; i < parts.size(); i++) {
+                if (i > 0) label.append(", ");
+                label.append(parts.get(i).label());
+            }
+        }
+        btnUpdate.setContentDescription(visible ? label.toString() : "Обновить приложение");
         if (visible && updateForeground && updatePreferences != null
                 && !version.equals(updatePreferences.getString("notified_version", ""))) {
             updatePreferences.edit().putString("notified_version", version).apply();
@@ -274,6 +285,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean moduleCards;
     /** config settings_key_keycodes / settings_key_panel, so the Settings button works on Home without HomeKeyService. */
     private int[] settingsKeycodes = new int[0];
+    /** config voice_key_scancodes: the remote's microphone button, which the firmware sends unmapped. */
+    private int[] voiceScancodes = new int[0];
+    /** config voice_key_keycodes: remotes that do send a mapped microphone/assist keycode. */
+    private int[] voiceKeycodes = new int[0];
+    /** voice_key, off by default. The MAX FF firmware already sends the microphone to the assistant, and its
+     *  gear arrives with the same unmapped scancode, so taking the raw key there would take the gear too. */
+    private boolean voiceKeyOn;
     private boolean settingsKeyPanel;
     /** Calmer motion for weak GPUs (config.xml, reduced_motion): stiff spring, short fades, no replay. */
     private boolean reducedMotion;
@@ -444,6 +462,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         applyViewInputsHandler(cfg.handleViewInputs);
         settingsKeycodes = cfg.settingsKeycodes;
         settingsKeyPanel = cfg.settingsKeyPanel;
+        voiceScancodes = getResources().getIntArray(R.array.voice_key_scancodes);
+        voiceKeycodes = getResources().getIntArray(R.array.voice_key_keycodes);
+        refreshVoiceKeyOn();
         COLUMNS = cfg.columns;
         animations = cfg.animations;
         advancedEffects = cfg.animations && cfg.advancedEffects;
@@ -800,11 +821,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnSleep = findViewById(R.id.btnSleep);
         btnSleep.setVisibility(cfg.sleepTimerButton ? View.VISIBLE : View.GONE);
         TextView btnVoice = findViewById(R.id.btnVoice);
-        btnVoice.setOnClickListener(v -> {
-            if(AssistantChoice.isLauncher(this)){
-                if(!LauncherAssistantService.launch())Toast.makeText(this,"Помощник ещё запускается. Повторите запрос",Toast.LENGTH_SHORT).show();
-            }else open(new Intent(Intent.ACTION_VOICE_COMMAND));
-        });
+        btnVoice.setOnClickListener(v -> openVoice());
         btnHomeSettings.setVisibility(View.GONE);
         btnSettings.setOnClickListener(v->{rememberedHeaderFocus=v.getId();openLauncherSection("");});
         btnSettings.setOnLongClickListener(v->{open(systemIntent(Settings.ACTION_SETTINGS));return true;});
@@ -1066,6 +1083,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         stopped = false;
         stopWallpaperOnStop = false;
         settlingFocus = true;
+        refreshVoiceKeyOn();
         OverlayService.wake();
         undim(false);
         updateForeground = true;
@@ -1568,6 +1586,32 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return false;
     }
 
+    /** The microphone button is only taken by Home when the owner asked for it, and never on the MAX FF. */
+    private void refreshVoiceKeyOn() {
+        voiceKeyOn = !Config.isMaxFirmware()
+                && getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getBoolean(Config.VOICE_KEY_KEY, false);
+    }
+
+    /** The remote's microphone button: KEYCODE_UNKNOWN carrying a raw scancode, or a mapped assist key. */
+    private boolean isVoiceKey(KeyEvent event) {
+        if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() > 0) return false;
+        for (int scan : voiceScancodes) {
+            if (event.getScanCode() == scan) return true;
+        }
+        for (int code : voiceKeycodes) {
+            if (event.getKeyCode() == code) return true;
+        }
+        return false;
+    }
+
+    /** The voice screen, the same way the header button opens it. */
+    private void openVoice() {
+        if (AssistantChoice.isLauncher(this)) {
+            if (!LauncherAssistantService.launch())
+                Toast.makeText(this, "Помощник ещё запускается. Повторите запрос", Toast.LENGTH_SHORT).show();
+        } else open(new Intent(Intent.ACTION_VOICE_COMMAND));
+    }
+
     // ---- reorder ---------------------------------------------------------------------------------
 
     /** Blue the glass turns while reorder mode is on. */
@@ -1590,8 +1634,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // This firmware sends the microphone button as an unmapped key (KEYCODE_UNKNOWN, scanCode 240), and the
+        // gear button arrives with the same unmapped code. Home takes the key only when the owner asked for it,
+        // and never on the MAX FF, where the firmware already routes the microphone to the assistant and the
+        // gear is answered by the bridge.
+        if (voiceKeyOn && isVoiceKey(event)) {
+            android.util.Log.w("tvvoice", "voice key scanCode=" + event.getScanCode()
+                    + " keyCode=" + event.getKeyCode());
+            openVoice();
+            return true;
+        }
         if (event.getAction() == KeyEvent.ACTION_DOWN && tilesReady) focusRestoreGeneration++;
         int key = event.getKeyCode();
+        if (key == KeyEvent.KEYCODE_UNKNOWN) {
+            android.util.Log.w("tvvoice", "unmapped key scanCode=" + event.getScanCode()
+                    + " action=" + event.getAction() + " source=" + event.getSource());
+        }
         if (event.getAction() == KeyEvent.ACTION_DOWN && !wallpaperBrowse.active()
                 && (key == KeyEvent.KEYCODE_DPAD_LEFT || key == KeyEvent.KEYCODE_DPAD_RIGHT
                 || key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN)) settlingFocus = false;
