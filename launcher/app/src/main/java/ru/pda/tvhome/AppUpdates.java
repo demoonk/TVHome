@@ -208,15 +208,21 @@ final class AppUpdates {
         if (!part.apk) {
             File folder = c.getExternalFilesDir(null);
             if (folder == null) throw new IOException("No launcher folder");
-            File target = new File(folder, "bridge/" + part.stageName());
-            File targetDir = target.getParentFile();
-            if (targetDir != null && !targetDir.isDirectory() && !targetDir.mkdirs()) throw new IOException("No bridge folder");
-            try (InputStream input = new FileInputStream(file); OutputStream out = new FileOutputStream(target)) {
-                byte[] bytes = new byte[8192]; int count;
-                while ((count = input.read(bytes)) != -1) out.write(bytes, 0, count);
-            }
-            try (OutputStream marker = new FileOutputStream(target.getAbsolutePath() + ".sha256")) {
-                marker.write((part.sha256 + "\n").getBytes("UTF-8"));
+            File targetDir = new File(folder, "bridge");
+            if (!targetDir.isDirectory() && !targetDir.mkdirs()) throw new IOException("No bridge folder");
+            for (int attempt = 0; ; attempt++) {
+                try {
+                    stage(file, targetDir, part);
+                    break;
+                } catch (FileNotFoundException denied) {
+                    // A bridge folder left by the shell domain during an earlier setup belongs to adb, not to
+                    // this app, so the launcher cannot create files inside it. An empty one is removed and
+                    // recreated by the launcher itself; a folder with content is left alone.
+                    if (attempt > 0) throw denied;
+                    File[] left = targetDir.listFiles();
+                    if (left == null || left.length > 0) throw denied;
+                    if (!targetDir.delete() || !targetDir.mkdirs()) throw denied;
+                }
             }
             prefs(c).edit().putString(STAGED_KEY + part.stageName(), part.sha256).apply();
             return part.label();
@@ -228,6 +234,25 @@ final class AppUpdates {
         c.startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK));
         return part.label();
+    }
+
+    /** Copies a verified part into the folder the shell guard reads, together with its checksum marker. */
+    private static void stage(File source, File targetDir, Part part) throws IOException {
+        File target = new File(targetDir, part.stageName());
+        try (InputStream input = new FileInputStream(source); OutputStream out = new FileOutputStream(target)) {
+            byte[] bytes = new byte[8192]; int count;
+            while ((count = input.read(bytes)) != -1) out.write(bytes, 0, count);
+        }
+        try (OutputStream marker = new FileOutputStream(target.getAbsolutePath() + ".sha256")) {
+            marker.write((part.sha256 + "\n").getBytes("UTF-8"));
+        }
+    }
+
+    /** A short reason for the owner: the class name alone said nothing useful on the TV. */
+    private static String describe(Exception failure) {
+        if (failure instanceof FileNotFoundException) return "телевизор не разрешил записать файл в папку моста";
+        if (failure instanceof IOException) { String message = failure.getMessage(); return message == null || message.isEmpty() ? "сеть недоступна" : message; }
+        return failure.getClass().getSimpleName();
     }
 
     static void schedule(Context c) {
@@ -266,8 +291,8 @@ final class AppUpdates {
                 for (Part part : parts) {
                     try { done.add(updatePart(c,part)); }
                     catch (Exception failure) {
-                        android.util.Log.w("AppUpdates","Part "+part.name+" unavailable: "+failure.getClass().getSimpleName());
-                        MAIN.post(() -> toast(c,"Компонент "+part.label()+" не обновлён: "+failure.getClass().getSimpleName()));
+                        android.util.Log.w("AppUpdates","Part "+part.name+" unavailable: "+failure);
+                        MAIN.post(() -> toast(c,"Компонент "+part.label()+" не обновлён: "+describe(failure)));
                     }
                 }
                 if (!done.isEmpty() && new BridgeTrigger().helperInstalled(c)) new BridgeTrigger().ask(c);
