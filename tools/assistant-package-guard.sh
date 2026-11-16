@@ -141,23 +141,23 @@ while :; do
     # bridge is the guard's own child here and is started again whenever it is gone. The remote is enumerated
     # late, so a missing one is searched again instead of given up on; the search only runs while the bridge is
     # not running, and is then throttled so a quiet guard stays quiet.
-    # A newer bridge build arrives from the release, downloaded by the launcher itself into its own external
-    # folder. Only the shell domain can run app_process, so the copy is made here: the file is accepted only
-    # when its SHA-256 matches the checksum the launcher wrote next to it, and the running bridge is stopped
-    # so the next pass starts the new one.
     # The launcher downloads the release's own parts into its external folder. Only the shell domain can put
     # files into /data/local/tmp and run app_process, so the copies are made here, each one checked against the
     # checksum the launcher wrote beside it. The guard never overwrites the script it is running from: the new
     # guard is parked next to it, and the ensure script moves it into place and restarts the guard by the
-    # recorded hash.
+    # recorded hash. A mismatch is reported once per pair of checksums, not on every pass of the loop.
     stage_dir=${TVHOME_STAGE:-/sdcard/Android/data/ru.pda.tvhome/files/bridge}
+    mismatch_state=$tmp_dir/stage-mismatch
     for staged in tvhome-remote-2.dex tvhome-bridge-ensure.sh assistant-package-guard.sh; do
         source=$stage_dir/$staged
         [ -f "$source" ] && [ -f "$source.sha256" ] || continue
         want=$(cat "$source.sha256" 2>/dev/null)
         got=$(sha256sum "$source" 2>/dev/null | awk '{print $1}')
         if [ -z "$want" ] || [ "$want" != "$got" ]; then
-            echo "staged $staged checksum mismatch" >> "$trace_file"
+            if [ "$(cat "$mismatch_state" 2>/dev/null)" != "$staged:$want:$got" ]; then
+                echo "staged $staged checksum mismatch" >> "$trace_file"
+                echo "$staged:$want:$got" > "$mismatch_state"
+            fi
             continue
         fi
         if [ "$staged" = "tvhome-remote-2.dex" ]; then
