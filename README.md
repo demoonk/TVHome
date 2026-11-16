@@ -457,23 +457,33 @@ cd launcher
 
 Для Linux/macOS используйте `./gradlew`. Package по умолчанию: `ru.pda.tvhome`, minSdk 26. Путь к ключу можно передать через `TVHOME_KEYSTORE` или `-PtvhomeKeystore=...`. Параметры подписи: `TVHOME_STORE_PASSWORD`, `TVHOME_KEY_ALIAS`, `TVHOME_KEY_PASSWORD`; значения по умолчанию соответствуют стандартному Android debug key. Для обновления уже установленного приложения используйте ровно тот ключ, которым подписана установленная версия. Сам ключ храните отдельно и не загружайте в GitHub.
 
-## Публикация следующей версии
+## Публикация версии
 
-1. Увеличить `versionCode` и `versionName` в `launcher/app/build.gradle`.
+**Один текущий выпуск.** Телевизор читает `releases/latest`, поэтому правки выкладываются в тот же выпуск, а не в новый: тег остаётся, активы заменяются (`gh release upload --clobber`), заново пишутся `update.json` и `SHA256SUMS.txt`. Промежуточных тегов не плодят — иначе телевизор скачивает одну версию, потом другую. Единственное, что обязано расти при повторной выкладке в тот же тег, — `versionCode`: без него Android не предложит установку поверх уже стоящей версии.
+
+Одной командой (сборка, контрольные суммы, замена активов):
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools\publish-release.ps1 -Version 2.1.12 -VersionCode 156
+```
+
+`-DryRun` проверяет согласованность `update.json` и файлов, ничего не выкладывая; `-SkipBuild` использует уже собранный APK.
+
+1. Увеличить `versionCode` в `launcher/app/build.gradle` (и `versionName` — только для новой версии, когда появляется новый тег).
 2. Собрать подписанный APK, пройти тесты и lint.
-3. Создать обычный публичный Release с тегом `v<versionName>`, приложить APK `TVHome-<versionName>.apk` и `update.json`.
+3. Создать обычный публичный Release с тегом `v<versionName>`, приложить APK `TVHome-<versionName>.apk` и `update.json`. Дальнейшие правки — в этот же выпуск.
 4. В `update.json` записать реальный `versionCode`, `versionName`, точное имя `apkName` и SHA-256 APK. Черновики и prerelease не предлагаются телевизору.
 5. Все публикуемые APK — лаунчер, помощник моста и виджет погоды — подписывать одним ключом (`-PtvhomeKeystore=...`). Ключ по умолчанию (`~/.android/debug.keystore`) создаётся заново на другом компьютере или после его удаления, и тогда тот же файл с тем же `versionCode` нельзя установить поверх уже стоящего: Android отвечает `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, а установщик может только предупредить. Если APK помощника или виджета меняется, повышайте `versionCode`; если подпись изменилась, пользователю нужно удалить пакет перед установкой.
-6. В `SHA256SUMS.txt` перечислить все приложенные файлы выпуска: APK лаунчера, APK помощника моста, APK виджета погоды, DEX моста, `assistant-package-guard.sh`, `install.ps1`, `install.sh`, `Setup-TVHome.ps1`, `update.json`. Файл без строки контрольной суммы установщик не устанавливает.
-7. Часть выпуска, которую телевизор скачивает сам (см. «Обновление частей лаунчера на телевизоре»), — виджет погоды, помощник моста, DEX моста и guard-скрипт. Для каждой из них в `update.json` указана строка `components` с именем файла, пакетом и `versionCode`.
+6. В `SHA256SUMS.txt` перечислить все приложенные файлы выпуска: APK лаунчера, APK помощника моста, APK виджета погоды, DEX моста, `assistant-package-guard.sh`, `tvhome-bridge-ensure.sh`, `install.ps1`, `install.sh`, `Setup-TVHome.ps1`, `update.json`. Файл без строки контрольной суммы установщик не устанавливает.
+7. Часть выпуска, которую телевизор скачивает сам (см. «Обновление частей лаунчера на телевизоре»), — виджет погоды, помощник моста, DEX моста, guard-скрипт и `tvhome-bridge-ensure.sh`. Для каждой из них в `update.json` указана строка `components` с именем файла, пакетом и `versionCode`. Перед выкладкой запускается `tools/refresh-installer-blobs.py`: установщик с компьютера содержит свои копии guard и ensure-скриптов, и они должны совпадать с файлами из `tools/`.
 
 Пример схемы (SHA-256 нужно заменить фактическим):
 
 ```json
 {
-  "versionCode": 154,
-  "versionName": "2.1.10",
-  "apkName": "TVHome-2.1.10.apk",
+  "versionCode": 156,
+  "versionName": "2.1.12",
+  "apkName": "TVHome-2.1.12.apk",
   "sha256": "<64 hexadecimal characters>",
   "components": [
     {"name": "TVHome-weather.apk", "package": "io.github.sumyabazar1.weather", "versionCode": 1, "sha256": "<64 hexadecimal characters>"},

@@ -218,6 +218,19 @@ class SetupTest(unittest.TestCase):
         data = (ROOT / 'Setup-TVHome.ps1').read_bytes()
         self.assertTrue(data.startswith(b'\xef\xbb\xbf'), 'Setup-TVHome.ps1 must start with a UTF-8 BOM')
 
+    def test_publisher_refreshes_one_release_instead_of_new_tags(self):
+        # The TV reads releases/latest. If every fix made its own tag, the owner would install 2.1.10, then
+        # 2.1.11, then 2.1.12 on the same evening. The publisher replaces the assets of the existing tag and
+        # only creates a release when the tag has none yet.
+        publisher = ROOT / 'tools' / 'publish-release.ps1'
+        self.assertTrue(publisher.read_bytes().startswith(b'\xef\xbb\xbf'),
+                        'tools/publish-release.ps1 must start with a UTF-8 BOM for Windows PowerShell 5.1')
+        script = publisher.read_text(encoding='utf-8-sig')
+        self.assertIn('gh release upload $tag --clobber', script, 'assets of the current release must be replaced')
+        self.assertIn('$DryRun', script, 'the publisher needs a dry run that checks the manifest without uploading')
+        readme = (ROOT / 'README.md').read_text(encoding='utf-8-sig')
+        self.assertIn('publish-release.ps1', readme, 'the README must document how the release is refreshed')
+
     def test_success(self):
         result, calls = self.scenario()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
