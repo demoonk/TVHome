@@ -39,7 +39,8 @@ final class UpdateRules {
         return name.matches("TVHome-[A-Za-z0-9._-]+\\.apk")
                 || name.matches("bridge-helper-[0-9][0-9A-Za-z._-]*\\.apk")
                 || name.matches("TVHome-remote-[0-9][0-9A-Za-z._-]*\\.dex")
-                || name.equals("assistant-package-guard.sh");
+                || name.equals("assistant-package-guard.sh")
+                || name.equals("tvhome-bridge-ensure.sh");
     }
 
     static boolean dexName(String name) {
@@ -48,6 +49,10 @@ final class UpdateRules {
 
     static boolean shellName(String name) {
         return "assistant-package-guard.sh".equals(name);
+    }
+
+    static boolean ensureName(String name) {
+        return "tvhome-bridge-ensure.sh".equals(name);
     }
 
     static boolean sha256(String hash) {

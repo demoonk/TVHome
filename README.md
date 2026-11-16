@@ -468,7 +468,8 @@ cd launcher
     {"name": "TVHome-weather.apk", "package": "io.github.sumyabazar1.weather", "versionCode": 1, "sha256": "<64 hexadecimal characters>"},
     {"name": "bridge-helper-1.7.apk", "package": "io.github.sumyabazar1.bridgehelper", "versionCode": 8, "sha256": "<64 hexadecimal characters>"},
     {"name": "TVHome-remote-2.1.10.dex", "sha256": "<64 hexadecimal characters>"},
-    {"name": "assistant-package-guard.sh", "sha256": "<64 hexadecimal characters>"}
+    {"name": "assistant-package-guard.sh", "sha256": "<64 hexadecimal characters>"},
+    {"name": "tvhome-bridge-ensure.sh", "sha256": "<64 hexadecimal characters>"}
   ]
 }
 ```

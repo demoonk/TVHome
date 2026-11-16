@@ -34,11 +34,15 @@ public class UpdateRulesTest {
             assertFalse("Rejected APK: " + value, UpdateRules.apkName(value));
     }
     @Test public void acceptsOnlyThePartsTheLauncherUpdates() {
-        for (String value : new String[]{"TVHome-weather.apk", "bridge-helper-1.7.apk", "TVHome-remote-2.1.10.dex"})
+        for (String value : new String[]{"TVHome-weather.apk", "bridge-helper-1.7.apk", "TVHome-remote-2.1.10.dex",
+                "assistant-package-guard.sh", "tvhome-bridge-ensure.sh"})
             assertTrue("Accepted part: " + value, UpdateRules.addOnName(value));
         for (String value : new String[]{null, "", "other.apk", "helper-1.7.apk", "TVHome-.apk",
-                "TVHome-2.1.10 dex", "TVHome-remote-2.1.10.dex.exe", "TVHome-remote.dex/evil"})
+                "TVHome-2.1.10 dex", "TVHome-remote-2.1.10.dex.exe", "TVHome-remote.dex/evil",
+                "guard.sh", "tvhome-bridge-ensure.sh.bak"})
             assertFalse("Rejected part: " + value, UpdateRules.addOnName(value));
+        assertTrue(UpdateRules.ensureName("tvhome-bridge-ensure.sh"));
+        assertFalse(UpdateRules.ensureName("assistant-package-guard.sh"));
     }
     @Test public void dexNamesAreRecognisedApartFromApks() {
         assertTrue(UpdateRules.dexName("TVHome-remote-2.1.10.dex"));

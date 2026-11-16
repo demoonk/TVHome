@@ -43,7 +43,9 @@ final class AppUpdates {
         }
         /** The name the shell side of the TV expects, whatever the release calls the asset. */
         String stageName() {
-            return UpdateRules.shellName(name) ? "assistant-package-guard.sh" : "tvhome-remote-2.dex";
+            if (UpdateRules.shellName(name)) return "assistant-package-guard.sh";
+            if (UpdateRules.ensureName(name)) return "tvhome-bridge-ensure.sh";
+            return "tvhome-remote-2.dex";
         }
         String label() {
             if (apk) {
@@ -51,7 +53,8 @@ final class AppUpdates {
                 if (BridgeTrigger.HELPER_PACKAGE.equals(packageName)) return "помощник моста";
                 return name;
             }
-            return UpdateRules.shellName(name) ? "guard моста" : "мост шестерёнки";
+            if (UpdateRules.shellName(name)) return "guard моста";
+            return UpdateRules.ensureName(name) ? "запуск моста" : "мост шестерёнки";
         }
     }
     static String repository(Context c) {

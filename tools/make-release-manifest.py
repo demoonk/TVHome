@@ -9,6 +9,7 @@ parts = [
     {"name": "bridge-helper-1.7.apk", "package": "io.github.sumyabazar1.bridgehelper", "versionCode": 8},
     {"name": "TVHome-remote-2.1.10.dex"},
     {"name": "assistant-package-guard.sh"},
+    {"name": "tvhome-bridge-ensure.sh"},
 ]
 
 digests = {}
