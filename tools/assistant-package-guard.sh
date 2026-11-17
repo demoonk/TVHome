@@ -29,7 +29,47 @@ package=com.google.android.katniss
 # The component the remote microphone button reaches when the launcher is the chosen assistant.
 launcher_assistant=ru.pda.tvhome/.VoiceLaunchActivity
 protected=" ru.pda.tvhome android com.android.tv.settings com.mediatek.tvinput com.google.android.tv.inputplayer com.mediatek.tv.inputplayeroverlay com.mediatek.tv.service com.mediatek.android.leanbacklauncher.partnercustomizer com.mediatek.androidbox com.mediatek.factorykey com.mediatek.wwtv.webview com.google.android.webview com.google.android.inputmethod.latin com.google.android.gms com.google.android.gsf com.google.android.play com.android.vending com.android.systemui com.android.providers.settings com.android.providers.tv com.android.providers.downloads com.google.android.tv.assistant com.google.android.tv.remote.service com.google.android.apps.mediashell com.google.android.apps.tv.dreamx com.google.android.tts com.dolby.android.audio.service com.mediatek.speakerservice com.homwee.dynamicbacklight com.homwee.lightsensorservice com.homwee.synckey com.homwee.upgrade com.homwee.dmt.upgrade com.homwee.mmp.screenshare com.homwee.multiscreenshare com.mediatek.autopair com.android.statementservice com.android.rkpdapp com.android.devicelockcontroller com.android.managedprovisioning com.android.packageinstaller com.google.android.packageinstaller com.android.keychain com.android.backupconfirm com.android.certinstaller com.android.tv.frameworkpackagestubs com.android.vpndialogs com.android.se com.android.bluetooth com.android.wifi.resources com.android.networkstack com.android.inputdevices com.google.android.ext.services com.google.android.ext.shared com.google.android.modulemetadata com.google.android.permissioncontroller "
-settings delete secure "$ack_key" >/dev/null
+cmd settings delete secure "$ack_key" >/dev/null 2>&1
+# Total CPU usage: the shell guard can read /proc/stat, while the launcher app cannot. Keep the most recent
+# busy percent in a secure setting so the CPU row can show a number even when proc files are denied by SELinux.
+stats_key=ru_pda_tvhome_cpu
+(
+    last_total=-1
+    last_idle=0
+    while :; do
+        line=$(head -1 /proc/stat 2>/dev/null)
+        if [ -n "$line" ]; then
+            set -- $line
+            user=${2:-0}
+            nice=${3:-0}
+            system=${4:-0}
+            idle=${5:-0}
+            io_wait=${6:-0}
+            irq=${7:-0}
+            soft_irq=${8:-0}
+            total=$((user + nice + system + idle + io_wait + irq + soft_irq))
+            if [ "$total" -gt 0 ]; then
+                if [ "$last_total" -gt 0 ]; then
+                    dt=$((total - last_total))
+                    di=$((idle - last_idle))
+                    if [ "$dt" -gt 0 ]; then
+                        busy=$(((dt - di) * 100 / dt))
+                    else
+                        busy=0
+                    fi
+                else
+                    busy=$(((total - idle) * 100 / total))
+                fi
+                if [ "$busy" -lt 0 ]; then busy=0; fi
+                if [ "$busy" -gt 100 ]; then busy=100; fi
+                cmd cmd settings put secure "$stats_key" "$busy" >/dev/null 2>&1
+                last_total=$total
+                last_idle=$idle
+            fi
+        fi
+        sleep 5
+    done
+) &
 # Remote gear: the stock shell reacts on its own and shows the old turnkey menu next to the launcher
 # settings. The physical gear also goes to the factory receiver, which opens system settings next to
 # the picture settings window; the owner decided on 2026-11-10 that the receiver package is frozen
@@ -53,7 +93,7 @@ while :; do
             # reaches TVHome from any app, the settings menu included - seen on the living-room TV on
             # 2026-11-11. It is frozen only when the initial setup is finished, so the setup wizard can still
             # run; the installer applies the same rule, and the trace records which way this pass went.
-            if [ "$(settings get global device_provisioned)" = 1 ]; then
+            if [ "$(cmd settings get global device_provisioned)" = 1 ]; then
                 pm disable-user --user 0 com.google.android.tungsten.setupwraith >/dev/null 2>&1
                 echo "home stub frozen" >> "$trace_file"
             else
@@ -62,7 +102,7 @@ while :; do
             # The owner's rule of 2026-11-14: the remote microphone button belongs to the launcher's own voice
             # screen while the assistant setting names it, so the Google assistant stays frozen after a reboot
             # or a firmware update that puts the package back. Switching to the system assistant unfreezes it.
-            if [ "$(settings get secure assistant)" = "$launcher_assistant" ]; then
+            if [ "$(cmd settings get secure assistant)" = "$launcher_assistant" ]; then
                 pm disable-user --user 0 "$package" >/dev/null 2>&1
                 echo "katniss frozen for the launcher assistant" >> "$trace_file"
             fi
@@ -73,12 +113,12 @@ while :; do
         pm_wait_logged=1
         echo "waiting: pm not answering" >> "$trace_file"
     fi
-    request=$(settings get secure "$request_key")
+    request=$(cmd settings get secure "$request_key")
     if [ "$request" != "$last_request" ]; then
         mode=${request%%:*}
         arg=${request#"$mode":}
         case "$mode" in
-            check) settings put secure "$ack_key" "$request" ;;
+            check) cmd settings put secure "$ack_key" "$request" ;;
             grant)
                 # The permissions the launcher declared but an app cannot grant to itself; the
                 # settings menu has no other way to get them after a reinstall resets the state.
@@ -86,7 +126,7 @@ while :; do
                         appops set ru.pda.tvhome RECORD_AUDIO allow >/dev/null 2>&1 &&
                         appops set ru.pda.tvhome SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1 &&
                         appops set ru.pda.tvhome GET_USAGE_STATS allow >/dev/null 2>&1; then
-                    settings put secure "$ack_key" "$request"
+                    cmd settings put secure "$ack_key" "$request"
                 fi
                 ;;
             freeze)
@@ -97,7 +137,7 @@ while :; do
                         # counted as the same state through the disabled list.
                         if pm disable-user --user 0 "$pkg" >/dev/null 2>&1 ||
                                 pm list packages -d | grep -qx "$pkg"; then
-                            settings put secure "$ack_key" "$request"
+                            cmd settings put secure "$ack_key" "$request"
                         fi
                     ;;
                 esac
@@ -107,7 +147,7 @@ while :; do
                 case "$protected" in *" $pkg "*) ;;
                     *)
                         if pm enable --user 0 "$pkg" >/dev/null 2>&1; then
-                            settings put secure "$ack_key" "$request"
+                            cmd settings put secure "$ack_key" "$request"
                         fi
                     ;;
                 esac
@@ -117,20 +157,20 @@ while :; do
                 # setting. Checked on the living-room TV on 2026-11-14: naming TVHome's voice activity makes the
                 # remote button open the launcher's own search, so the launcher choice points the assistant at
                 # TVHome and freezes Katniss. The system choice, the "system" mode below, unfreezes it again.
-                if settings put secure assistant "$launcher_assistant" >/dev/null 2>&1 &&
-                        settings put secure voice_interaction_service ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService >/dev/null 2>&1 &&
-                        settings put secure voice_recognition_service com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService >/dev/null 2>&1 &&
+                if cmd settings put secure assistant "$launcher_assistant" >/dev/null 2>&1 &&
+                        cmd settings put secure voice_interaction_service ru.pda.tvhome/ru.pda.tvhome.LauncherAssistantService >/dev/null 2>&1 &&
+                        cmd settings put secure voice_recognition_service com.google.android.tts/com.google.android.apps.speech.tts.googletts.service.GoogleTTSRecognitionService >/dev/null 2>&1 &&
                         ( pm disable-user --user 0 "$package" >/dev/null 2>&1 ||
                           pm list packages -d | grep -qx "$package" ); then
-                    settings put secure "$ack_key" "$request"
+                    cmd settings put secure "$ack_key" "$request"
                 fi
                 ;;
             system)
                 # The owner chose the system assistant: Katniss has to be able to answer the remote button,
                 # and the assistant setting has to name it for the remote microphone to be routed to it.
                 if pm enable --user 0 "$package" >/dev/null 2>&1 &&
-                        settings put secure assistant "$package/.search.serviceapi.KatnissVoiceInteractionService" >/dev/null 2>&1; then
-                    settings put secure "$ack_key" "$request"
+                        cmd settings put secure assistant "$package/.search.serviceapi.KatnissVoiceInteractionService" >/dev/null 2>&1; then
+                    cmd settings put secure "$ack_key" "$request"
                 fi
                 ;;
         esac

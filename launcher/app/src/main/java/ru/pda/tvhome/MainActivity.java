@@ -253,11 +253,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private static final BridgeTrigger bridgeTrigger = new BridgeTrigger();
     private TextView shamsiDate;
     private TextView stats;
+    private TextView cpuStat, memoryStat;
+    private View systemStatsRow;
     private List<RaceWeekend.Race> raceCalendar;
     private View racePanel;
     private TextView raceKicker, raceHeadline, raceSessions;
     /** config.xml show_stats, overridable by a theme. Off: the line is gone and nothing is read. */
     private boolean showStats;
+    /** Header load/memory indicators before the clock, chosen in the clock settings. */
+    private boolean statsCpuOn, statsMemoryOn;
     private boolean shamsi;
     /** greeting_name: said after the greeting, which is shown in capitals. */
     private String greetingName = "";
@@ -557,6 +561,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         btnWifi = findViewById(R.id.btnWifi);
         shamsiDate = findViewById(R.id.shamsiDate);
         stats = findViewById(R.id.stats);
+        cpuStat = findViewById(R.id.cpuStat);
+        memoryStat = findViewById(R.id.memoryStat);
+        systemStatsRow = findViewById(R.id.systemStatsRow);
+        statsCpuOn = tvChoices.getBoolean(Config.STATS_CPU_KEY, false);
+        statsMemoryOn = tvChoices.getBoolean(Config.STATS_MEMORY_KEY, false);
+        showStats = statsCpuOn || statsMemoryOn;
+        if (systemStatsRow != null) systemStatsRow.setVisibility(showStats ? View.VISIBLE : View.GONE);
+        if (stats != null && statsCpuOn) stats.setVisibility(View.GONE);
         raceCalendar = cfg.raceCalendar;
         racePanel = findViewById(R.id.racePanel);
         raceKicker = findViewById(R.id.raceKicker);
@@ -2491,7 +2503,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private void startStats() {
         if (statsThread != null) return;
-        stats.setVisibility(View.VISIBLE);
+        if (stats != null) stats.setVisibility(View.GONE);
+        if (systemStatsRow != null) systemStatsRow.setVisibility(View.VISIBLE);
+        if (cpuStat != null) cpuStat.setVisibility(statsCpuOn ? View.VISIBLE : View.GONE);
+        if (memoryStat != null) memoryStat.setVisibility(statsMemoryOn ? View.VISIBLE : View.GONE);
         cpuTotalPrev = -1;
         idlePrev = -1;
         procStatDead = false;
@@ -2506,8 +2521,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             public void run() {
                 if (statsBg != bg) return;
                 String line = readStatsLine();
+                String cpuText = headerCpuText();
+                String memoryText = headerMemoryText();
                 handler.post(() -> {
-                    if (showStats && stats != null && statsBg == bg) stats.setText(line);
+                    if (showStats && statsBg == bg) {
+                        if (stats != null) stats.setText(line);
+                        if (cpuStat != null && statsCpuOn) cpuStat.setText(cpuText);
+                        if (memoryStat != null && statsMemoryOn) memoryStat.setText(memoryText);
+                    }
                 });
                 if (statsBg == bg) bg.postDelayed(this, STATS_MS);
             }
@@ -2522,7 +2543,27 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         statsBg = null;
         // Paused (the quick panel or an app on top): keep the last line on screen. Taking it away moved the grid up
         // under a glass highlight that stayed put.
-        if (!showStats) stats.setVisibility(View.GONE);
+        if (!showStats) {
+            if (stats != null) stats.setVisibility(View.GONE);
+            if (systemStatsRow != null) systemStatsRow.setVisibility(View.GONE);
+        }
+    }
+
+    private String headerCpuText() {
+        int cpu = cpuPercent();
+        if (cpu < 0) {
+            try {
+                cpu = Settings.Secure.getInt(getContentResolver(), "ru_pda_tvhome_cpu", -1);
+            } catch (RuntimeException ignored) {
+                cpu = -1;
+            }
+        }
+        return cpu < 0 ? "—" : cpu + "%";
+    }
+
+    private String headerMemoryText() {
+        long mb = SystemStats.freeMemoryMb(this);
+        return mb < 0 ? "—" : mb + " МБ";
     }
 
     // ---- the weather's two lines, as the Weather module card reports them --------------------------

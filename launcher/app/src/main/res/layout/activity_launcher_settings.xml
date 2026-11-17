@@ -122,6 +122,22 @@
         
 
         <TextView
+            android:id="@+id/cpuChoice"
+            style="@style/SettingsRow"
+            android:layout_marginTop="18dp"
+            android:drawableStart="@drawable/ic_cpu"
+            android:drawablePadding="12dp"
+            android:text="Показывать загрузку процессора" />
+
+        <TextView
+            android:id="@+id/memoryChoice"
+            style="@style/SettingsRow"
+            android:layout_marginTop="10dp"
+            android:drawableStart="@drawable/ic_memory"
+            android:drawablePadding="12dp"
+            android:text="Показывать свободную память" />
+
+        <TextView
             android:id="@+id/clockColorChoice"
             style="@style/SettingsRow"
             android:layout_marginTop="18dp"

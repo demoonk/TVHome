@@ -37,8 +37,13 @@ final class Config {
     static final String CLOCK_ALPHA_KEY = "clock_alpha";
     static final String CLOCK_X_KEY = "clock_x";
     static final String CLOCK_Y_KEY = "clock_y";
+    /** True only while the settings screen is positioning the overlay clock: it makes the preview blink. */
+    static final String CLOCK_PLACING_KEY = "clock_placing";
     /** Font family of the overlay clock, one of the families the launcher offers. */
     static final String CLOCK_FONT_KEY = "clock_font";
+    /** Header system line, chosen in the clock settings: show CPU load and free memory before the clock. */
+    static final String STATS_CPU_KEY = "stats_cpu_on";
+    static final String STATS_MEMORY_KEY = "stats_memory_on";
     /** OLED pixel shift: nudge the whole interface, overlay clock included, every five minutes. */
     static final String OLED_SHIFT_KEY = "oled_shift";
     /** Header plates (launcher settings): a dark backing under the clock row and under every header pill,

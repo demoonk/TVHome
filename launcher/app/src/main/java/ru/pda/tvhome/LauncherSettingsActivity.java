@@ -19,6 +19,8 @@ import android.content.IntentFilter;
 import android.view.KeyEvent;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -78,6 +80,8 @@ public final class LauncherSettingsActivity extends Activity {
             "Serif", "Mono", "Cursive", "Casual"};
     private int clockFont;
     private TextView clockFontChoice, oledShiftChoice, headerPlateChoice, plateOpacityChoice, plateBlurChoice;
+    private TextView cpuChoice, memoryChoice;
+    private boolean statsCpuOn, statsMemoryOn;
     private boolean oledShift;
     /** Header plates: the backing under the clock row and under every pill, for bright wallpapers. */
     private boolean headerPlate;
@@ -100,6 +104,7 @@ public final class LauncherSettingsActivity extends Activity {
     protected void onResume() {
         super.onResume();
         refreshAssistantChoice();
+        SettingsColumns.refresh(this);
         IntentFilter homeFilter = new IntentFilter(Intent.ACTION_CLOSE_SYSTEM_DIALOGS);
         if (Build.VERSION.SDK_INT >= 33) {
             // Android 13+ wants the exposure flag on a runtime receiver, even for a system broadcast.
@@ -111,6 +116,7 @@ public final class LauncherSettingsActivity extends Activity {
 
     @Override
     protected void onPause() {
+        if (placingClock) stopPlacingClock();
         try {
             unregisterReceiver(homeKey);
         } catch (IllegalArgumentException notRegistered) {
@@ -230,6 +236,24 @@ public final class LauncherSettingsActivity extends Activity {
         clockFontChoice.setOnClickListener(v -> chooseList("Шрифт часов", CLOCK_FONT_NAMES, clockFont, which -> {
             clockFont = which; choices.edit().putString(Config.CLOCK_FONT_KEY, CLOCK_FONTS[which]).apply();
             clockInk.clear(); notifyClockChanged(); refresh(); }));
+        statsCpuOn = choices.getBoolean(Config.STATS_CPU_KEY, false);
+        statsMemoryOn = choices.getBoolean(Config.STATS_MEMORY_KEY, false);
+        cpuChoice = findViewById(R.id.cpuChoice);
+        memoryChoice = findViewById(R.id.memoryChoice);
+        if (cpuChoice != null) cpuChoice.setOnClickListener(v -> {
+            statsCpuOn = !statsCpuOn;
+            choices.edit().putBoolean(Config.STATS_CPU_KEY, statsCpuOn).apply();
+            changed();
+            notifyClockChanged();
+            refresh();
+        });
+        if (memoryChoice != null) memoryChoice.setOnClickListener(v -> {
+            statsMemoryOn = !statsMemoryOn;
+            choices.edit().putBoolean(Config.STATS_MEMORY_KEY, statsMemoryOn).apply();
+            changed();
+            notifyClockChanged();
+            refresh();
+        });
         oledShift = choices.getBoolean(Config.OLED_SHIFT_KEY, true);
         String pictureKey = choices.getString(Config.PICTURE_KEY_KEY, "off");
         for (int i = 0; i < PICTURE_KEYS.length; i++) if (PICTURE_KEYS[i].equals(pictureKey)) pictureKeyIndex = i;
@@ -452,6 +476,8 @@ public final class LauncherSettingsActivity extends Activity {
                 city == null || city.isEmpty() ? getString(R.string.weather_city_none) : city));
     }
 
+
+
     /** The next value in a fixed list, wrapping: one row taps through the choices in order. */
     private static int indexOf(String[] values, String value) {
         for (int i = 0; i < values.length; i++) if (values[i].equals(value)) return i;
@@ -482,6 +508,8 @@ public final class LauncherSettingsActivity extends Activity {
     private void startPlacingClock() {
         if (placingClock) return;
         placingClock = true;
+        choices.edit().putBoolean(Config.CLOCK_PLACING_KEY, true).apply();
+        notifyClockChanged();
         float density = getResources().getDisplayMetrics().density;
         int screenW = Math.round(getResources().getDisplayMetrics().widthPixels);
         int screenH = Math.round(getResources().getDisplayMetrics().heightPixels);
@@ -534,7 +562,8 @@ public final class LauncherSettingsActivity extends Activity {
     private void stopPlacingClock() {
         if (!placingClock) return;
         placingClock = false;
-        choices.edit().putInt(Config.CLOCK_X_KEY, placingX).putInt(Config.CLOCK_Y_KEY, placingY).apply();
+        choices.edit().putInt(Config.CLOCK_X_KEY, placingX).putInt(Config.CLOCK_Y_KEY, placingY)
+                .putBoolean(Config.CLOCK_PLACING_KEY, false).apply();
         notifyClockChanged();
         clockFontChoice.setText(getString(R.string.clock_font_state, CLOCK_FONT_NAMES[clockFont]));
         oledShiftChoice.setText(getString(R.string.oled_shift, getString(oledShift ? R.string.clock_on_yes : R.string.clock_on_no)));

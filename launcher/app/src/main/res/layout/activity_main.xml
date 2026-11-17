@@ -183,6 +183,45 @@
                     android:textAllCaps="true" />
 
                 <LinearLayout
+                    android:id="@+id/systemStatsRow"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:baselineAligned="false"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/cpuStat"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:drawableStart="@drawable/ic_cpu"
+                        android:drawablePadding="8dp"
+                        android:gravity="left"
+                        android:singleLine="true"
+                        android:textColor="#A6FFFFFF"
+                        android:textSize="14sp"
+                        android:fontFamily="@string/font_medium"
+                        android:letterSpacing="0.06"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/memoryStat"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="18dp"
+                        android:drawableStart="@drawable/ic_memory"
+                        android:drawablePadding="8dp"
+                        android:gravity="left"
+                        android:singleLine="true"
+                        android:textColor="#A6FFFFFF"
+                        android:textSize="14sp"
+                        android:fontFamily="@string/font_medium"
+                        android:letterSpacing="0.06"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <LinearLayout
                     android:id="@+id/clockRow"
                     android:layout_width="wrap_content"
                     android:layout_height="42dp"
