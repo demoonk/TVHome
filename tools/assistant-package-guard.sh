@@ -62,7 +62,7 @@ stats_key=ru_pda_tvhome_cpu
                 fi
                 if [ "$busy" -lt 0 ]; then busy=0; fi
                 if [ "$busy" -gt 100 ]; then busy=100; fi
-                cmd cmd settings put secure "$stats_key" "$busy" >/dev/null 2>&1
+                cmd settings put secure "$stats_key" "$busy" >/dev/null 2>&1
                 last_total=$total
                 last_idle=$idle
             fi
