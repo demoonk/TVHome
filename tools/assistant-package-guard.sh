@@ -106,6 +106,21 @@ while :; do
                 pm disable-user --user 0 "$package" >/dev/null 2>&1
                 echo "katniss frozen for the launcher assistant" >> "$trace_file"
             fi
+
+            # HDMI cannot be opened on the MediaTek/CHiQ sets while the stock TV-settings/input
+            # services are frozen, even when TVHome is the Home. Firmware, a previous cleanup or a
+            # reboot can leave them disabled for user 0, so every start wakes the services back.
+            if pm path com.android.tv.settings >/dev/null 2>&1 ||
+               pm path com.mediatek.tvinput >/dev/null 2>&1 ||
+               pm path com.mediatek.tv.service >/dev/null 2>&1; then
+                for service in com.android.tv.settings com.mediatek.tvinput com.mediatek.tv.service; do
+                    if pm path "$service" >/dev/null 2>&1 &&
+                       cmd dumpsys package "$service" 2>/dev/null | grep -q 'enabled=0' &&
+                       pm enable --user 0 "$service" >/dev/null 2>&1; then
+                        echo "HDMI services unfrozen: $service" >> "$trace_file"
+                    fi
+                done
+            fi
             boot_freeze=1
             echo "freeze done" >> "$trace_file"
         fi
